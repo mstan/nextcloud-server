@@ -11,6 +11,7 @@ namespace OC\Files\Storage;
 use OC\Files\Filesystem;
 use OC\Files\Storage\Wrapper\Encryption;
 use OC\Files\Storage\Wrapper\Jail;
+use OC\Files\Utils\PathHelper;
 use OC\LargeFileHelper;
 use OCA\FilesAccessControl\StorageWrapper;
 use OCP\Constants;
@@ -55,7 +56,7 @@ class Local extends Common {
 		if ($this->datadir === '/') {
 			$this->realDataDir = $this->datadir;
 		} else {
-			$realPath = realpath($this->datadir) ?: $this->datadir;
+			$realPath = PathHelper::normalizeOsPath(realpath($this->datadir) ?: $this->datadir);
 			$this->realDataDir = rtrim($realPath, '/') . '/';
 		}
 		if (!str_ends_with($this->datadir, '/')) {
@@ -87,6 +88,7 @@ class Local extends Common {
 
 	#[\Override]
 	public function mkdir(string $path): bool {
+		$this->assertNoCaseConflict($path);
 		$sourcePath = $this->getSourcePath($path);
 		$oldMask = umask($this->defUMask);
 		$result = @mkdir($sourcePath, 0777, true);
@@ -119,6 +121,9 @@ class Local extends Common {
 				if (in_array($file->getBasename(), ['.', '..'], true)) {
 					$it->next();
 					continue;
+				} elseif ($file->isLink() && DIRECTORY_SEPARATOR === '\\' && is_dir($file->getPathname())) {
+					// Windows removes directory symlinks and junctions with rmdir(), not unlink().
+					rmdir($file->getPathname());
 				} elseif ($file->isFile() || $file->isLink()) {
 					unlink($file->getPathname());
 				} elseif ($file->isDir()) {
@@ -300,6 +305,7 @@ class Local extends Common {
 		if ($this->file_exists($path) && !$this->isUpdatable($path)) {
 			return false;
 		}
+		$this->assertNoCaseConflict($path);
 		$oldMask = umask($this->defUMask);
 		if (!is_null($mtime)) {
 			$result = @touch($this->getSourcePath($path), $mtime);
@@ -321,6 +327,7 @@ class Local extends Common {
 
 	#[\Override]
 	public function file_put_contents(string $path, mixed $data): int|float|false {
+		$this->assertNoCaseConflict($path);
 		$oldMask = umask($this->defUMask);
 		if ($this->unlinkOnTruncate) {
 			$this->unlink($path);
@@ -335,10 +342,53 @@ class Local extends Common {
 		if ($this->is_dir($path)) {
 			return $this->rmdir($path);
 		} elseif ($this->is_file($path)) {
-			return unlink($this->getSourcePath($path));
+			$sourcePath = $this->getSourcePath($path);
+			return $this->retryOnSharingViolation(fn () => @unlink($sourcePath), $sourcePath);
 		} else {
 			return false;
 		}
+	}
+
+	/**
+	 * On a case-insensitive volume the OS resolves "a.txt" to an existing
+	 * "A.txt", so creating one silently opens or overwrites the other while
+	 * the (case-sensitive) file cache records two entries. Refuse instead.
+	 *
+	 * @throws ForbiddenException
+	 */
+	private function assertNoCaseConflict(string $path): void {
+		if (!$this->caseInsensitive || $path === '' || $this->file_exists($path)) {
+			return;
+		}
+		if (file_exists($this->getSourcePath($path))) {
+			throw new ForbiddenException('An item with the same name in different letter case already exists: ' . basename($path), false);
+		}
+	}
+
+	/**
+	 * Windows refuses to delete or rename a file another process holds open
+	 * without FILE_SHARE_DELETE (virus scanners, the search indexer, backup
+	 * agents). Those handles are short-lived, so retry briefly before failing.
+	 * Elsewhere, and when the path is gone, the result is returned unchanged.
+	 *
+	 * @param callable(): bool $op
+	 */
+	private function retryOnSharingViolation(callable $op, string $sourcePath): bool {
+		$result = $op();
+		if ($result || DIRECTORY_SEPARATOR !== '\\') {
+			return $result;
+		}
+		foreach ([50, 100, 200, 400, 800] as $delayMs) {
+			clearstatcache(true, $sourcePath);
+			if (!file_exists($sourcePath)) {
+				return false;
+			}
+			usleep($delayMs * 1000);
+			if ($op()) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private function checkTreeForForbiddenItems(string $path): void {
@@ -353,8 +403,8 @@ class Local extends Common {
 
 	#[\Override]
 	public function rename(string $source, string $target): bool {
-		$srcParent = dirname($source);
-		$dstParent = dirname($target);
+		$srcParent = \OC\Files\Utils\PathHelper::dirname($source);
+		$dstParent = \OC\Files\Utils\PathHelper::dirname($target);
 
 		$logger = Server::get(LoggerInterface::class);
 
@@ -373,6 +423,11 @@ class Local extends Common {
 			return false;
 		}
 
+		// A case-only rename (a.txt -> A.txt) is fine; anything else must not land on a case variant.
+		if (mb_strtolower($target) !== mb_strtolower($source)) {
+			$this->assertNoCaseConflict($target);
+		}
+
 		if ($this->file_exists($target)) {
 			if ($this->is_dir($target)) {
 				$this->rmdir($target);
@@ -388,7 +443,7 @@ class Local extends Common {
 			$this->checkTreeForForbiddenItems($absoluteSource);
 		}
 
-		if (@rename($absoluteSource, $absoluteTarget)) {
+		if ($this->retryOnSharingViolation(fn () => @rename($absoluteSource, $absoluteTarget), $absoluteSource)) {
 			if ($this->caseInsensitive) {
 				if (mb_strtolower($target) === mb_strtolower($source) && !$this->file_exists($target)) {
 					return false;
@@ -425,6 +480,9 @@ class Local extends Common {
 		if ($this->is_dir($source)) {
 			return parent::copy($source, $target);
 		} else {
+			if (mb_strtolower($target) !== mb_strtolower($source)) {
+				$this->assertNoCaseConflict($target);
+			}
 			$oldMask = umask($this->defUMask);
 			if ($this->unlinkOnTruncate) {
 				$this->unlink($target);
@@ -446,7 +504,7 @@ class Local extends Common {
 		$path = $sourcePath;
 		while (str_starts_with($path, $root . '/')) {
 			clearstatcache(true, $path);
-			$parent = dirname($path);
+			$parent = \OC\Files\Utils\PathHelper::dirname($path);
 			if ($parent === $path) {
 				return;
 			}
@@ -459,6 +517,9 @@ class Local extends Common {
 		$sourcePath = $this->getSourcePath($path);
 		if (!file_exists($sourcePath) && $mode === 'r') {
 			return false;
+		}
+		if ($mode !== 'r' && $mode !== 'rb') {
+			$this->assertNoCaseConflict($path);
 		}
 		$oldMask = umask($this->defUMask);
 		try {
@@ -549,6 +610,12 @@ class Local extends Common {
 			throw new ForbiddenException('Invalid path: ' . $path, false);
 		}
 
+		if ($this->datadir === '/' && DIRECTORY_SEPARATOR === '\\') {
+			// The root storage used by copyFromStorage()/moveFromStorage() is handed
+			// absolute OS paths, which on Windows start with a drive ('C:/...'), not '/'.
+			return PathHelper::isAbsoluteOsPath($path) ? $path : '/' . $path;
+		}
+
 		$fullPath = $this->datadir . $path;
 		$currentPath = $path;
 		$allowSymlinks = $this->config->getSystemValueBool('localstorage.allowsymlinks', false);
@@ -558,7 +625,7 @@ class Local extends Common {
 		$pathToResolve = $fullPath;
 		$realPath = realpath($pathToResolve);
 		while ($realPath === false) { // for non existing files check the parent directory
-			$currentPath = dirname($currentPath);
+			$currentPath = \OC\Files\Utils\PathHelper::dirname($currentPath);
 			/** @psalm-suppress TypeDoesNotContainType Let's be extra cautious and still check for empty string */
 			if ($currentPath === '' || $currentPath === '.') {
 				return $fullPath;
@@ -566,7 +633,7 @@ class Local extends Common {
 			$realPath = realpath($this->datadir . $currentPath);
 		}
 		if ($realPath) {
-			$realPath = $realPath . '/';
+			$realPath = PathHelper::normalizeOsPath($realPath) . '/';
 		}
 		if (substr($realPath, 0, $this->dataDirLength) === $this->realDataDir) {
 			return $fullPath;
