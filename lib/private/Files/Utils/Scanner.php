@@ -176,7 +176,7 @@ class Scanner extends PublicEmitter {
 							throw new NotFoundException("User folder $fullPath exists in cache but not on disk");
 						} elseif ($storage->is_dir($path)) {
 							$ownerUid = fileowner($fullPath);
-							$owner = posix_getpwuid($ownerUid);
+							$owner = function_exists('posix_getpwuid') ? posix_getpwuid($ownerUid) : false;
 							$owner = $owner['name'] ?? $ownerUid;
 							$permissions = decoct(fileperms($fullPath));
 							throw new ForbiddenException("User folder $fullPath is not writable, folders is owned by $owner and has mode $permissions");

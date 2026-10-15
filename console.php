@@ -44,14 +44,15 @@ try {
 	$config = Server::get(IConfig::class);
 	set_exception_handler('exceptionHandler');
 
-	if (!function_exists('posix_getuid')) {
+	if (PHP_OS_FAMILY !== 'Windows' && !function_exists('posix_getuid')) {
 		echo 'The posix extensions are required - see https://www.php.net/manual/en/book.posix.php' . PHP_EOL;
 		exit(1);
 	}
 
-	$user = posix_getuid();
+	// Windows has no POSIX uids (fileowner() is always 0); NTFS ACLs govern access instead.
+	$user = PHP_OS_FAMILY === 'Windows' ? null : posix_getuid();
 	$configUser = fileowner(OC::$configDir . 'config.php');
-	if ($user !== $configUser) {
+	if ($user !== null && $user !== $configUser) {
 		echo 'Console has to be executed with the user that owns the file config/config.php' . PHP_EOL;
 		echo 'Current user id: ' . $user . PHP_EOL;
 		echo 'Owner id of config.php: ' . $configUser . PHP_EOL;

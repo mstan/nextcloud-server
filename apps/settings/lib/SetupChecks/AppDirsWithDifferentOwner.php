@@ -77,6 +77,10 @@ class AppDirsWithDifferentOwner implements ISetupCheck {
 
 	#[\Override]
 	public function run(): SetupResult {
+		if (!function_exists('posix_getuid')) {
+			// No POSIX file ownership on this platform (Windows); NTFS ACLs govern access instead.
+			return SetupResult::success($this->l10n->t('App directory ownership does not apply on this platform'));
+		}
 		$currentUser = posix_getuid();
 		$currentUserInfos = posix_getpwuid($currentUser) ?: [];
 		$appDirsWithDifferentOwner = $this->getAppDirsWithDifferentOwner($currentUser);

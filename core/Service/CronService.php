@@ -123,13 +123,14 @@ class CronService {
 		}
 
 		// the cron job must be executed with the right user
-		if (!function_exists('posix_getuid')) {
+		if (PHP_OS_FAMILY !== 'Windows' && !function_exists('posix_getuid')) {
 			throw new \RuntimeException('The posix extensions are required - see https://www.php.net/manual/en/book.posix.php');
 		}
 
-		$user = posix_getuid();
+		// Windows has no POSIX uids (fileowner() is always 0); NTFS ACLs govern access instead.
+		$user = PHP_OS_FAMILY === 'Windows' ? null : posix_getuid();
 		$configUser = fileowner(OC::$configDir . 'config.php');
-		if ($user !== $configUser) {
+		if ($user !== null && $user !== $configUser) {
 			throw new \RuntimeException('Console has to be executed with the user that owns the file config/config.php.' . PHP_EOL . 'Current user id: ' . $user . PHP_EOL . 'Owner id of config.php: ' . $configUser . PHP_EOL);
 		}
 
