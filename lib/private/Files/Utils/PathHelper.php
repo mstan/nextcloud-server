@@ -55,4 +55,39 @@ class PathHelper {
 
 		return $path;
 	}
+
+	/**
+	 * dirname() for Nextcloud's '/'-separated virtual and storage paths.
+	 *
+	 * Identical to dirname() except on Windows, where dirname('/x') and
+	 * dirname('/') return '\' instead of '/'. Code walking up a path until it
+	 * reaches '/' would otherwise never terminate.
+	 */
+	public static function dirname(string $path, int $levels = 1): string {
+		$dir = dirname($path, $levels);
+		return ($dir === '\\' && DIRECTORY_SEPARATOR === '\\') ? '/' : $dir;
+	}
+
+	/**
+	 * Use '/' as the separator in an OS file-system path.
+	 *
+	 * On Windows, realpath(), __DIR__, getcwd() and directory iterators return
+	 * '\'-separated paths, while Nextcloud compares OS paths with '/'. Windows
+	 * accepts '/' everywhere. A no-op on other platforms, where '\' is a valid
+	 * file-name character.
+	 */
+	public static function normalizeOsPath(string $path): string {
+		return DIRECTORY_SEPARATOR === '\\' ? str_replace('\\', '/', $path) : $path;
+	}
+
+	/**
+	 * Whether an OS file-system path is absolute: '/...' everywhere, plus
+	 * drive ('C:/...', 'C:\...') and UNC ('\\server\share') paths on Windows.
+	 */
+	public static function isAbsoluteOsPath(string $path): bool {
+		if ($path !== '' && $path[0] === '/') {
+			return true;
+		}
+		return DIRECTORY_SEPARATOR === '\\' && preg_match('#^([a-zA-Z]:[\\\\/]|[\\\\/]{2}[^\\\\/])#', $path) === 1;
+	}
 }
