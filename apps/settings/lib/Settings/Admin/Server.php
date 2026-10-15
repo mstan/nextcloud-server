@@ -42,6 +42,11 @@ class Server implements IDelegatedSettings {
 		$ownerConfigFile = fileowner(\OC::$configDir . 'config.php');
 		$cliBasedCronPossible = function_exists('posix_getpwuid') && $ownerConfigFile !== false;
 		$cliBasedCronUser = $cliBasedCronPossible ? (posix_getpwuid($ownerConfigFile)['name'] ?? '') : '';
+		if (PHP_OS_FAMILY === 'Windows') {
+			// No POSIX owners; cron runs as whatever account runs this PHP (e.g. a Windows service).
+			$cliBasedCronPossible = true;
+			$cliBasedCronUser = get_current_user();
+		}
 
 		// Background jobs
 		$this->initialStateService->provideInitialState('backgroundJobsMode', $this->appConfig->getValueString('core', 'backgroundjobs_mode', 'ajax'));

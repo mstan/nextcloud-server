@@ -40,6 +40,25 @@ class CleanupBackgroundJobsJob extends TimedJob {
 		$this->cleanOldestRuns();
 	}
 
+	private function processExists(int $pid): bool {
+		if (function_exists('posix_kill')) {
+			return posix_kill($pid, 0) || posix_get_last_error() === 1 /* EPERM */;
+		}
+		if (PHP_OS_FAMILY === 'Windows') {
+			// No signals on Windows; ask the process table. Array form: no shell involved.
+			$p = @proc_open(['tasklist', '/FI', "PID eq $pid", '/NH', '/FO', 'CSV'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+			if (is_resource($p)) {
+				$out = stream_get_contents($pipes[1]);
+				fclose($pipes[1]);
+				fclose($pipes[2]);
+				proc_close($p);
+				return is_string($out) && str_contains($out, '"' . $pid . '"');
+			}
+		}
+		// Cannot tell: assume alive rather than wrongly marking a running job as crashed.
+		return true;
+	}
+
 	private function reapCrashedJobs(): void {
 		$currentServerId = $this->serverInfo->getServerId();
 
@@ -47,7 +66,7 @@ class CleanupBackgroundJobsJob extends TimedJob {
 			if ($job->serverId !== $currentServerId) {
 				continue;
 			}
-			$processExists = posix_kill($job->pid, 0) || posix_get_last_error() === 1 /* EPERM */;
+			$processExists = $this->processExists($job->pid);
 			if (!$processExists) {
 				// Process doesn't exist anymore
 				$maxDuration = (new DateTimeImmutable())->diff($job->startedAt);

@@ -41,7 +41,7 @@ final readonly class JobRuns implements IJobRuns {
 			->insert(self::TABLE)
 			->setValue('run_id', $id)
 			->setValue('class_id', $qb->createNamedParameter($classId))
-			->setValue('pid', $qb->createNamedParameter(posix_getpid()))
+			->setValue('pid', $qb->createNamedParameter(getmypid()))
 			->setValue('status', $qb->createNamedParameter(JobStatus::RUNNING->value))
 			->executeStatement();
 
