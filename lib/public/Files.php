@@ -36,9 +36,12 @@ class Files {
 
 			foreach ($files as $fileInfo) {
 				/** @var \SplFileInfo $fileInfo */
-				if ($fileInfo->isLink() && DIRECTORY_SEPARATOR === '\\' && is_dir($fileInfo->getPathname())) {
-					// Windows removes directory symlinks and junctions with rmdir(), not unlink().
-					rmdir($fileInfo->getPathname());
+				if ($fileInfo->isLink() && DIRECTORY_SEPARATOR === '\\') {
+					// Windows removes directory symlinks and junctions with rmdir(), not unlink();
+					// is_dir() is not reliable for a junction, so fall back from unlink().
+					if (is_dir($fileInfo->getPathname()) || !@unlink($fileInfo->getPathname())) {
+						rmdir($fileInfo->getPathname());
+					}
 				} elseif ($fileInfo->isLink()) {
 					unlink($fileInfo->getPathname());
 				} elseif ($fileInfo->isDir()) {

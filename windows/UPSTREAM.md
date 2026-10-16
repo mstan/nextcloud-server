@@ -92,6 +92,8 @@ everything. The weekly canary should already have surfaced conflicts.
 | OS path helpers | `lib/private/Files/Utils/PathHelper.php` | `normalizeOsPath()`, `isAbsoluteOsPath()` |
 | drive-letter data dir | `lib/private/legacy/OC_Util.php` | data dir had to start with `/` |
 | Local storage realpath | `lib/private/Files/Storage/Local.php` | `\` from `realpath()` made every path look outside the data dir ("Following symlinks is not allowed") |
+| realpath spelling | `PathHelper::realOsPath()`, `realOsPathOrSelf()`; used by `Local` (constructor, `getSourcePath()`) and `{Resource,JS,CSS}Locator` | `realpath()` keeps the 8.3 spelling (`RUNNER~1`) stored in a symlink/junction target but returns long names for a plain path, so a path through a link failed the data-dir prefix check ("Following symlinks is not allowed") and an app-path symlink resolved to another spelling. Resolving the result again settles on the long form; a data dir that does not exist yet is resolved through its nearest existing ancestor |
+| stale realpath cache | `Local::fopen()`, `Local::clearRealpathCache()` | on Windows `file_exists()` also reads the realpath cache, keyed by the caller's spelling (`/` vs `\`): a path another process replaced stayed "missing"; a read-mode miss now clears both spellings and rechecks |
 | migrations discovery | `lib/private/DB/MigrationService.php` | `/`-only regex over `realpath()` output found zero migrations: install created no tables |
 | template web roots | `lib/private/Template/{Resource,JS,CSS}Locator.php` | `findWebRoot()` looped forever at a drive root; `\` paths missed the mapping |
 | integrity check paths | `lib/private/IntegrityCheck/Checker.php`, `Iterator/ExcludeFoldersByPathFilterIterator.php` | hash keys and exclusions compared `\` paths with `/` |
@@ -99,7 +101,7 @@ everything. The weekly canary should already have surfaced conflicts.
 | Local storage root mode | `Local::getSourcePath()` | cross-storage moves use `Local(['datadir' => '/'])` with `C:/...` paths |
 | Local case conflicts | `Local` mkdir/fopen/touch/file_put_contents/rename/copy | NTFS resolves `a.txt` to an existing `A.txt`: silent overwrite + duplicate cache rows; now `ForbiddenException` (403) |
 | sharing violations | `Local::unlink()`, `Local::rename()` | AV/indexer handles block delete/rename briefly; bounded retry |
-| junctions | `OCP\Files::rmdirr()`, `Local::rmdir()` | directory links need `rmdir()` on Windows |
+| junctions | `OCP\Files::rmdirr()`, `Local::rmdir()` | directory links need `rmdir()` on Windows; `is_dir()` is false for a junction, so `rmdirr()` falls back from `unlink()` |
 | data dir / apps_paths normalisation | `Setup.php`, `OC.php`, setup checks, `JSConfigHelper` | backslashed config values never match `/`-joined paths |
 | previews | `Preview/Movie.php`, `Preview/Office.php`, `Preview/Storage/LocalPreviewStorage.php` | `ffmpeg.exe` detection, LibreOffice `file:///C:/` URL + quoting, `\` iterator paths |
 | misc | `Log/File.php` (chmod per line), `Type/Detection.php` (`test -f`), `SchemaChecker.php` (regex), `PreviewCommand.php` | |
@@ -111,7 +113,7 @@ everything. The weekly canary should already have surfaced conflicts.
 | object-store URNs | `StorageObjectStore` | `:` in `urn:oid:N` names an NTFS alternate data stream |
 | line endings | `JSCombiner`, `JSConfigHelper`, `EMailTemplate` | `PHP_EOL` made generated JS/mail differ per platform |
 | integrity signing | `Checker::loadDownstreamCertificate()`, `resources/codesigning/downstream-root.crt` | patched core is re-signed by the downstream root, trusted for exact-CN matches only |
-| tests | `tests/lib/TestCase.php` (`linkDirectory()`), `LocalTest`, `Storage`, `LogFactoryTest`, `AppDirsWithDifferentOwnerTest`, new `LocalWindowsSemanticsTest`, `PathHelperOsPathTest` | junction fallback where symlinks need privileges; skips only for cases impossible on NTFS/Windows |
+| tests | `tests/lib/TestCase.php` (`linkDirectory()`), `LocalTest` (out-of-process path swap without `rm`/`mkdir -p`), `{CSS,JS}ResourceLocatorTest` (expected root in long `/` form), `Storage`, `LogFactoryTest`, `AppDirsWithDifferentOwnerTest`, new `LocalWindowsSemanticsTest`, `PathHelperOsPathTest` | junction fallback where symlinks need privileges; skips only for cases impossible on NTFS/Windows |
 
 Release-only apps (not in this repo, e.g. `recommendations`, `photos`, `serverinfo`, `logreader`) have a few cosmetic `dirname()`/`'/'` issues; not patched yet.
 
@@ -131,6 +133,7 @@ Release-only apps (not in this repo, e.g. `recommendations`, `photos`, `serverin
 
 ### Disproved (do not re-investigate)
 
+- "Symlink tests fail because `symlink()` with a relative target or `exec('mkdir -p')` misbehave": a relative target fails on Windows (`linkDirectory()` falls back to a junction); `cmd.exe` resolves `mkdir` to its built-in, which has no `-p` (`rm` and `printf` resolve to Git's, which is why only the `mkdir -p` step of the stale-cache tests broke).
 - "Install hangs": the first hang was `findWebRoot()` at a drive root, the second `dirname('/x') === '\'`; the remaining slowness was SQLite fsync on a slow disk (CPU idle, WAL growing).
 
 ### Open

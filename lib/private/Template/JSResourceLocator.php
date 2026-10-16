@@ -41,7 +41,7 @@ class JSResourceLocator extends ResourceLocator {
 			// Only do this if $app_path is set, because an empty argument to realpath gets turned into cwd.
 			if ($appRoot) {
 				// Handle symlinks
-				$appRoot = realpath($appRoot);
+				$appRoot = \OC\Files\Utils\PathHelper::realOsPath($appRoot);
 				$appRoot = $appRoot === false ? false : \OC\Files\Utils\PathHelper::normalizeOsPath($appRoot);
 			}
 			// Get the app webroot
