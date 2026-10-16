@@ -39,6 +39,7 @@ type Supervisor struct {
 	started time.Time
 
 	shutdown context.CancelFunc // ordered stop, same as an SCM stop request
+	journal  *ring.Journal      // on-disk copy of ring, nil if unavailable
 
 	mu       sync.Mutex
 	children []*proc.Child
@@ -51,7 +52,32 @@ func New(cfgPath string) (*Supervisor, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Supervisor{cfg: cfg, cfgPath: cfgPath, ring: ring.New(cfg.Ring.Capacity)}, nil
+	s := &Supervisor{cfg: cfg, cfgPath: cfgPath}
+	s.ring, s.journal = openRing(cfg)
+	return s, nil
+}
+
+// openRing returns the event ring, continued from its on-disk journal so
+// history survives restarts and crashes. If the journal is unavailable the
+// ring still works in memory, and says so in its first event.
+func openRing(cfg config.Config) (*ring.Buffer, *ring.Journal) {
+	if cfg.Ring.JournalMB == 0 {
+		return ring.New(cfg.Ring.Capacity), nil
+	}
+	path := cfg.JournalPath()
+	var j *ring.Journal
+	prior, err := ring.LoadJournal(path, cfg.Ring.Capacity)
+	if err == nil {
+		if err = os.MkdirAll(filepath.Dir(path), 0o755); err == nil {
+			j, err = ring.OpenJournal(path, int64(cfg.Ring.JournalMB)<<20)
+		}
+	}
+	if err != nil {
+		r := ring.New(cfg.Ring.Capacity)
+		r.Add("svc.error", "ring", "journal unavailable, events kept in memory only: "+err.Error(), nil)
+		return r, nil
+	}
+	return ring.NewJournaled(cfg.Ring.Capacity, j, prior), j
 }
 
 // Run blocks until ctx is cancelled. Children are started in dependency
@@ -60,6 +86,9 @@ func (s *Supervisor) Run(ctx context.Context) error {
 	ctx, s.shutdown = context.WithCancel(ctx)
 	defer s.shutdown()
 	s.started = time.Now()
+	if s.journal != nil {
+		defer s.journal.Close() // after svc.stop below is recorded
+	}
 	s.ring.Add("svc.start", "ncwin", "", map[string]string{"config": s.cfgPath})
 	defer s.ring.Add("svc.stop", "ncwin", "", nil)
 
