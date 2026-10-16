@@ -50,7 +50,8 @@ class File extends LogDetails implements IWriter, IFileBased {
 	public function write(string $app, $message, int $level): void {
 		$entry = $this->logDetailsAsJSON($app, $message, $level);
 		$handle = @fopen($this->logFile, 'a');
-		if ($this->logFileMode > 0 && is_file($this->logFile) && (fileperms($this->logFile) & 0777) !== $this->logFileMode) {
+		// Windows has no Unix mode bits (fileperms() reports 0666 whatever chmod() did), so this would chmod on every line.
+		if ($this->logFileMode > 0 && DIRECTORY_SEPARATOR !== '\\' && is_file($this->logFile) && (fileperms($this->logFile) & 0777) !== $this->logFileMode) {
 			@chmod($this->logFile, $this->logFileMode);
 		}
 		if ($handle) {

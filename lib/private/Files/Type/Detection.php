@@ -258,7 +258,9 @@ class Detection implements IMimeTypeDetector {
 			// it looks like we have a 'file' command,
 			// lets see if it does have mime support
 			$path = escapeshellarg($path);
-			$fp = popen("test -f $path && $program -b --mime-type $path", 'r');
+			$fp = popen(DIRECTORY_SEPARATOR === '\\'
+				? escapeshellarg($program) . " -b --mime-type $path" // cmd.exe has no `test`
+				: "test -f $path && $program -b --mime-type $path", 'r');
 			if ($fp !== false) {
 				$mimeType = fgets($fp);
 				pclose($fp);
