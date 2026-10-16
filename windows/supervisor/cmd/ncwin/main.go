@@ -13,6 +13,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -31,6 +32,7 @@ import (
 	"github.com/mstan/nextcloud-server/windows/supervisor/internal/ring"
 	"github.com/mstan/nextcloud-server/windows/supervisor/internal/service"
 	"github.com/mstan/nextcloud-server/windows/supervisor/internal/setup"
+	"github.com/mstan/nextcloud-server/windows/supervisor/internal/update"
 )
 
 const defaultConfig = `C:\ProgramData\ncwin\ncwin.toml`
@@ -80,6 +82,8 @@ func main() {
 		err = runSetup(args)
 	case "ca":
 		err = ca(args)
+	case "update":
+		err = runUpdate(args)
 	case "version":
 		fmt.Println(version)
 	default:
@@ -95,7 +99,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ncwin setup|ca|shutdown|install|uninstall|start|stop|status|events|occ|grant-path|run|render|version [args]")
+	fmt.Fprintln(os.Stderr, "usage: ncwin setup|update|ca|shutdown|install|uninstall|start|stop|status|events|occ|grant-path|run|render|version [args]")
 	os.Exit(2)
 }
 
@@ -147,6 +151,9 @@ func status() error {
 	}
 	if st.Cron != nil {
 		fmt.Printf("cron      last %s took %s %s\n", st.Cron["at"], st.Cron["took"], st.Cron["error"])
+	}
+	if st.Upgrade != "" {
+		fmt.Printf("upgrade   %s\n", st.Upgrade)
 	}
 	fmt.Printf("ring      seq %d..%d\n", st.Ring[0], st.Ring[1])
 	return nil
@@ -276,4 +283,60 @@ func ca(args []string) error {
 		return cmd.Run()
 	}
 	return fmt.Errorf("usage: ncwin ca [--config f] export <file.crt> | trust")
+}
+
+// scmService adapts the Service Control Manager to update.Service.
+type scmService struct{}
+
+func (scmService) Stop() error  { return service.Stop() }
+func (scmService) Start() error { return service.Start() }
+
+// runUpdate installs a newer release (see internal/update). install_dir is
+// renamed during the update, which Windows refuses while this executable runs
+// from it, so the command first re-launches a copy of itself from state_dir.
+func runUpdate(args []string) error {
+	fs := flag.NewFlagSet("update", flag.ExitOnError)
+	cfgPath := fs.String("config", defaultConfig, "path to ncwin.toml")
+	from := fs.String("from", "", "release zip path or https URL (default: latest GitHub release)")
+	sum := fs.String("sha256", "", "SHA-256 of --from")
+	extOK := fs.Bool("external-db-backed-up", false, "confirm an external database has been backed up")
+	relocated := fs.Bool("relocated", false, "internal: running from the relocated copy")
+	_ = fs.Parse(args)
+	c, err := config.Load(*cfgPath)
+	if err != nil {
+		return err
+	}
+	if !*relocated {
+		self, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		dir := filepath.Join(c.Paths.StateDir, "updates")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+		cp := filepath.Join(dir, "ncwin-updater.exe")
+		b, err := os.ReadFile(self)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(cp, b, 0o755); err != nil {
+			return err
+		}
+		cmd := exec.Command(cp, append([]string{"update", "--relocated"}, args...)...)
+		cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
+		if err := cmd.Run(); err != nil {
+			var ee *exec.ExitError
+			if errors.As(err, &ee) {
+				return exitCode(ee.ExitCode())
+			}
+			return err
+		}
+		return nil
+	}
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	return update.Run(ctx, c, scmService{}, update.Options{
+		Source: *from, SHA256: *sum, Repo: c.Update.Repo, ExternalDBBackedUp: *extOK, Log: os.Stdout,
+	})
 }

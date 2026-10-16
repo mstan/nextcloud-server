@@ -3,6 +3,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -41,6 +42,7 @@ type Supervisor struct {
 
 	mu       sync.Mutex
 	children []*proc.Child
+	upgrade  string // last automatic `occ upgrade` outcome, for status
 	cronLast map[string]string
 }
 
@@ -97,6 +99,11 @@ func (s *Supervisor) Run(ctx context.Context) error {
 		tctx, cancel := context.WithCancel(context.Background())
 		cancels[i] = cancel
 		for _, sp := range specs {
+			if sp.Name == "web" {
+				// New code from `ncwin update` (or a manual swap) is migrated
+				// before anything serves it; the database tier is already up.
+				s.upgradeIfNeeded(ctx)
+			}
 			c := proc.NewChild(sp, s.ring)
 			s.mu.Lock()
 			s.children = append(s.children, c)
@@ -291,6 +298,7 @@ type Status struct {
 	Started  time.Time         `json:"started"`
 	Children map[string]int    `json:"children"` // name -> pid (0 = down)
 	Cron     map[string]string `json:"cron"`
+	Upgrade  string            `json:"upgrade,omitempty"`
 	Ring     [2]uint64         `json:"ring"` // oldest seq, next seq
 }
 
@@ -303,6 +311,7 @@ func (s *Supervisor) handle(ctx context.Context, op string, args json.RawMessage
 			st.Children[c.Name()] = c.Pid()
 		}
 		st.Cron = s.cronLast
+		st.Upgrade = s.upgrade
 		s.mu.Unlock()
 		st.Ring[0], st.Ring[1] = s.ring.Bounds()
 		return st, nil
@@ -369,4 +378,50 @@ func (s *Supervisor) watchLoop(ctx context.Context) {
 		NightlyScan: s.cfg.Watcher.NightlyScan,
 	}, s.ring, app)
 	w.Run(ctx)
+}
+
+// upgradeIfNeeded runs `occ upgrade` when the code on disk is newer than the
+// database (needsDbUpgrade). Output goes to log/upgrade.log; the outcome is in
+// the ring (svc.upgrade.*) and in `ncwin status`.
+func (s *Supervisor) upgradeIfNeeded(ctx context.Context) {
+	var out bytes.Buffer
+	if code := nc.Occ(ctx, s.cfg, s.ring, "upgrade", &out, "status", "--output=json"); code != 0 {
+		s.ring.Add("svc.error", "upgrade", fmt.Sprintf("occ status exited %d: %.300s", code, out.String()), nil)
+		return
+	}
+	var st struct {
+		Installed      bool   `json:"installed"`
+		NeedsDBUpgrade bool   `json:"needsDbUpgrade"`
+		Version        string `json:"versionstring"`
+	}
+	if i := bytes.IndexByte(out.Bytes(), '{'); i < 0 || json.Unmarshal(out.Bytes()[i:], &st) != nil {
+		s.ring.Add("svc.error", "upgrade", fmt.Sprintf("unparsable occ status: %.300s", out.String()), nil)
+		return
+	}
+	if !st.Installed || !st.NeedsDBUpgrade {
+		return
+	}
+	logf, err := os.OpenFile(filepath.Join(filepath.FromSlash(s.cfg.LogDir()), "upgrade.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		s.ring.Add("svc.error", "upgrade", err.Error(), nil)
+		return
+	}
+	defer logf.Close()
+	s.ring.Add("svc.upgrade.start", "upgrade", st.Version, nil)
+	s.setUpgrade("running " + st.Version)
+	if code := nc.Occ(ctx, s.cfg, s.ring, "upgrade", logf, "upgrade"); code != 0 {
+		// Nextcloud stays in maintenance mode; `ncwin update` rolls back, a
+		// manual swap needs attention (see log/upgrade.log).
+		s.ring.Add("svc.upgrade.failed", "upgrade", fmt.Sprintf("occ upgrade exited %d", code), nil)
+		s.setUpgrade(fmt.Sprintf("FAILED (exit %d), see upgrade.log", code))
+		return
+	}
+	s.ring.Add("svc.upgrade.done", "upgrade", st.Version, nil)
+	s.setUpgrade("done " + st.Version)
+}
+
+func (s *Supervisor) setUpgrade(v string) {
+	s.mu.Lock()
+	s.upgrade = v
+	s.mu.Unlock()
 }
