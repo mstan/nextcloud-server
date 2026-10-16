@@ -408,7 +408,8 @@ class Filesystem {
 			\OC_Util::setupFS();
 		}
 		$mount = new MountPoint($class, $mountpoint, $arguments, self::getLoader());
-		self::$mounts->addMount($mount);
+		// setupFS() without a user does not initialise the mount manager.
+		self::getMountManager()->addMount($mount);
 	}
 
 	/**
