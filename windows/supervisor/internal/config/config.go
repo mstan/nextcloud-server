@@ -23,9 +23,12 @@ type Config struct {
 	Update   Update   `toml:"update"`
 }
 
-// Update says where `ncwin update` looks for releases.
+// Update says where `ncwin update` looks for releases, and whether the daily
+// scheduled check installs them.
 type Update struct {
-	Repo string `toml:"repo"` // GitHub owner/name publishing ncwin-*.zip releases
+	Repo   string `toml:"repo"`   // GitHub owner/name publishing ncwin releases
+	Auto   bool   `toml:"auto"`   // install new releases of the running Nextcloud major automatically
+	Majors bool   `toml:"majors"` // let automatic updates move to a new Nextcloud major too
 }
 
 // Paths. InstallDir holds read-only program files (php/, nextcloud/, ncwin.exe);
@@ -110,7 +113,7 @@ func Default() Config {
 		Cron:     Cron{Interval: Duration{5 * time.Minute}},
 		Watcher:  Watcher{Enabled: true, Debounce: Duration{2 * time.Second}, NightlyScan: "03:30"},
 		Ring:     Ring{Capacity: 65536},
-		Update:   Update{Repo: "mstan/nextcloud-server"},
+		Update:   Update{Repo: "mstan/nextcloud-server", Auto: true},
 	}
 }
 

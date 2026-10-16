@@ -3,6 +3,8 @@ package ipc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 )
@@ -12,6 +14,8 @@ import (
 // account in the DACL. (In the field the service account was missing and
 // every client timed out.)
 func TestRepeatedCallsWithoutAllowSID(t *testing.T) {
+	pipeName = fmt.Sprintf("%s-test-%d", PipeName, os.Getpid())
+	defer func() { pipeName = PipeName }()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	srv := Server{Plain: func(_ context.Context, op string, _ json.RawMessage) (any, error) { return op, nil }}
