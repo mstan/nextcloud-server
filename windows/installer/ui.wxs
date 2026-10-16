@@ -23,11 +23,11 @@
         <Control Id="DataDirLabel" Type="Text" X="20" Y="52" Width="330" Height="10" Text="Data directory (keep the path short):" />
         <Control Id="DataDir" Type="Edit" X="20" Y="63" Width="330" Height="17" Property="NCWIN_DATADIR" />
 
-        <Control Id="DbLabel" Type="Text" X="20" Y="86" Width="120" Height="10" Text="Database (bundled, managed by ncwin):" />
+        <Control Id="DbLabel" Type="Text" X="20" Y="86" Width="330" Height="10" Text="Database (bundled, managed by ncwin):" />
         <Control Id="Db" Type="RadioButtonGroup" X="20" Y="97" Width="330" Height="16" Property="NCWIN_DB">
           <RadioButtonGroup Property="NCWIN_DB">
-            <RadioButton Value="pgsql" X="0" Y="0" Width="100" Height="15" Text="PostgreSQL (recommended)" />
-            <RadioButton Value="mysql" X="110" Y="0" Width="80" Height="15" Text="MariaDB" />
+            <RadioButton Value="pgsql" X="0" Y="0" Width="125" Height="15" Text="PostgreSQL (recommended)" />
+            <RadioButton Value="mysql" X="130" Y="0" Width="65" Height="15" Text="MariaDB" />
             <RadioButton Value="sqlite" X="200" Y="0" Width="130" Height="15" Text="SQLite (small/trial only)" />
           </RadioButtonGroup>
         </Control>
@@ -40,13 +40,13 @@
         <Control Id="HostsLabel" Type="Text" X="170" Y="120" Width="180" Height="10" Text="LAN names / IPs (comma-separated):" />
         <Control Id="Hosts" Type="Edit" X="170" Y="131" Width="180" Height="17" Property="NCWIN_HOSTNAMES" />
 
-        <Control Id="DomainLabel" Type="Text" X="20" Y="154" Width="200" Height="10" Text="Public domain (optional, gets a Let's Encrypt certificate):" />
+        <Control Id="DomainLabel" Type="Text" X="20" Y="154" Width="160" Height="10" Text="Public domain (optional):" />
         <Control Id="Domain" Type="Edit" X="20" Y="165" Width="160" Height="17" Property="NCWIN_DOMAIN" />
-        <Control Id="EmailLabel" Type="Text" X="190" Y="154" Width="160" Height="10" Text="Let's Encrypt e-mail:" />
+        <Control Id="EmailLabel" Type="Text" X="190" Y="154" Width="160" Height="10" Text="E-mail for Let's Encrypt:" />
         <Control Id="Email" Type="Edit" X="190" Y="165" Width="160" Height="17" Property="NCWIN_ACMEEMAIL" />
 
         <Control Id="Hint" Type="Text" X="20" Y="190" Width="330" Height="30" NoPrefix="yes"
-                 Text="A public domain needs ports 80 and 443 reachable from the internet (directly or forwarded). Everything can be changed later in C:\ProgramData\ncwin\ncwin.toml." />
+                 Text="A public domain gets a free Let's Encrypt certificate. It needs ports 80 and 443 reachable from the internet (directly or forwarded). Everything can be changed later in C:\ProgramData\ncwin\ncwin.toml." />
 
         <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
         <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)">
