@@ -99,7 +99,7 @@ func New(opt Options, r *ring.Buffer, app Applier) *Watcher {
 		opt.RetryDelay = 5 * time.Second
 	}
 	if opt.RootsEvery == 0 {
-		opt.RootsEvery = 10 * time.Minute
+		opt.RootsEvery = time.Minute // cheap (one query on the running applier); new Local mounts are watched within a minute
 	}
 	return &Watcher{opt: opt, ring: r, app: app, noise: map[string]int{}, attempts: map[string]int{}, pending: map[string]struct{}{}, rescans: map[string]struct{}{},
 		wake: make(chan struct{}, 1), watching: map[string]context.CancelFunc{}}

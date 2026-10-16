@@ -19,7 +19,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -251,5 +253,130 @@ func TestDirectDiskEditVisible(t *testing.T) {
 			t.Fatal("file deleted on disk still listed after 60s")
 		}
 		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+func (e *env) url(path string) string { return strings.TrimRight(e.base, "/") + path }
+
+func (e *env) raw(t *testing.T, method, url string, body io.Reader, hdr map[string]string) (int, []byte) {
+	t.Helper()
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.SetBasicAuth(e.user, e.pass)
+	for k, v := range hdr {
+		req.Header.Set(k, v)
+	}
+	resp, err := e.c.Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", method, url, err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, b
+}
+
+var hrefRe = regexp.MustCompile(`<d:href>([^<]+)</d:href>`)
+
+// Delete goes to the trash bin (files_trashbin) and can be restored.
+func TestTrashRestore(t *testing.T) {
+	e := setup(t)
+	d := e.folder(t)
+	name := fmt.Sprintf("trash-me-%d.txt", time.Now().UnixNano())
+	e.expect(t, 201, "PUT", d+"/"+name, strings.NewReader("keep me"), nil)
+	e.expect(t, 204, "DELETE", d+"/"+name, nil, nil)
+	trash := e.url("/remote.php/dav/trashbin/" + e.user + "/trash")
+	_, b := e.raw(t, "PROPFIND", trash, nil, map[string]string{"Depth": "1"})
+	var item string
+	for _, m := range hrefRe.FindAllStringSubmatch(string(b), -1) {
+		if strings.Contains(m[1], name) {
+			item = m[1]
+		}
+	}
+	if item == "" {
+		t.Fatalf("%s not in trash bin", name)
+	}
+	if s, b := e.raw(t, "MOVE", e.url(item), nil, map[string]string{"Destination": e.url("/remote.php/dav/trashbin/" + e.user + "/restore/" + name)}); s != 201 && s != 204 {
+		t.Fatalf("restore = %d: %.300s", s, b)
+	}
+	if b := e.expect(t, 200, "GET", d+"/"+name, nil, nil); string(b) != "keep me" {
+		t.Fatalf("restored content = %q", b)
+	}
+}
+
+// Overwriting creates a version (files_versions) that can be restored.
+func TestVersionRestore(t *testing.T) {
+	e := setup(t)
+	d := e.folder(t)
+	e.expect(t, 201, "PUT", d+"/v.txt", strings.NewReader("one"), nil)
+	time.Sleep(1100 * time.Millisecond) // versions are keyed by mtime seconds
+	e.expect(t, 204, "PUT", d+"/v.txt", strings.NewReader("two"), nil)
+	_, b := e.do(t, "PROPFIND", d+"/v.txt", strings.NewReader(`<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:fileid/></d:prop></d:propfind>`), map[string]string{"Depth": "0"})
+	m := regexp.MustCompile(`<oc:fileid>(\d+)</oc:fileid>`).FindSubmatch(b)
+	if m == nil {
+		t.Fatalf("no fileid: %.300s", b)
+	}
+	versions := e.url("/remote.php/dav/versions/" + e.user + "/versions/" + string(m[1]))
+	_, b = e.raw(t, "PROPFIND", versions, nil, map[string]string{"Depth": "1"})
+	hrefs := hrefRe.FindAllStringSubmatch(string(b), -1)
+	if len(hrefs) < 2 {
+		t.Fatalf("no versions listed: %.300s", b)
+	}
+	if s, b := e.raw(t, "MOVE", e.url(hrefs[1][1]), nil, map[string]string{"Destination": e.url("/remote.php/dav/versions/" + e.user + "/restore/target")}); s != 201 && s != 204 {
+		t.Fatalf("restore = %d: %.300s", s, b)
+	}
+	if b := e.expect(t, 200, "GET", d+"/v.txt", nil, nil); string(b) != "one" {
+		t.Fatalf("after restore content = %q", b)
+	}
+}
+
+// Image previews are generated (GD) and served.
+func TestPreview(t *testing.T) {
+	e := setup(t)
+	d := e.folder(t)
+	// 2x2 red PNG
+	png, _ := hex.DecodeString("89504e470d0a1a0a0000000d49484452000000020000000208020000fdd49a730000001449444154789c63f8cfc0f09f818181818181e1ff00001efb03fd2f54e94f0000000049454e44ae426082")
+	e.expect(t, 201, "PUT", d+"/p.png", bytes.NewReader(png), nil)
+	_, b := e.do(t, "PROPFIND", d+"/p.png", strings.NewReader(`<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:fileid/></d:prop></d:propfind>`), map[string]string{"Depth": "0"})
+	m := regexp.MustCompile(`<oc:fileid>(\d+)</oc:fileid>`).FindSubmatch(b)
+	if m == nil {
+		t.Fatalf("no fileid")
+	}
+	s, img := e.raw(t, "GET", e.url("/index.php/core/preview?fileId="+string(m[1])+"&x=32&y=32&a=1"), nil, nil)
+	if s != 200 || !bytes.HasPrefix(img, []byte("\x89PNG")) && !bytes.HasPrefix(img, []byte("\xff\xd8")) {
+		t.Fatalf("preview = %d, %d bytes", s, len(img))
+	}
+}
+
+// A "Local" external storage mount edited on disk shows up (watcher on extra roots).
+// Needs NCWIN_EXE (path to ncwin.exe, to run occ through the service).
+func TestExternalLocalMount(t *testing.T) {
+	e := setup(t)
+	exe := os.Getenv("NCWIN_EXE")
+	if exe == "" {
+		t.Skip("NCWIN_EXE not set")
+	}
+	dir := t.TempDir()
+	mount := fmt.Sprintf("/ext-%d", time.Now().UnixNano())
+	out, err := exec.Command(exe, "occ", "files_external:create", mount, "local", "null::null", "-c", "datadir="+filepath.ToSlash(dir), "--output=json").CombinedOutput()
+	if err != nil {
+		t.Fatalf("create mount: %v %s", err, out)
+	}
+	id := strings.TrimSpace(string(out))
+	t.Cleanup(func() { exec.Command(exe, "occ", "files_external:delete", "--yes", id).Run() })
+	os.WriteFile(filepath.Join(dir, "on-disk.txt"), []byte("external"), 0o644)
+	deadline := time.Now().Add(150 * time.Second) // roots refresh every minute
+	for {
+		if _, b := e.do(t, "PROPFIND", mount, nil, map[string]string{"Depth": "1"}); bytes.Contains(b, []byte("on-disk.txt")) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("file written into the external mount not visible after 150s")
+		}
+		time.Sleep(time.Second)
+	}
+	if b := e.expect(t, 200, "GET", mount+"/on-disk.txt", nil, nil); string(b) != "external" {
+		t.Fatalf("GET = %q", b)
 	}
 }
