@@ -15,18 +15,25 @@ This repository is `nextcloud/server` plus a small set of Windows commits on
 
 ## One-time GitHub setup (fork)
 
+`master` on the fork mirrors the current `win/NN` and is the default branch
+(scheduled workflows run from the default branch). The tracking workflow
+updates both; for a new major, `git push --force origin win/NN:master`.
+
 ```sh
-gh repo edit mstan/nextcloud-server --default-branch win/35   # scheduled workflows run from the default branch
-# upstream's ~60 workflows would otherwise run on our pushes:
-gh workflow list -R mstan/nextcloud-server --all --json name,path \
-  --jq '.[] | select(.path | test("ncwin-") | not) | .path' |
-  xargs -n1 basename | xargs -I{} gh workflow disable {} -R mstan/nextcloud-server
-# signing keys (zip of core.key/.crt, windows_integration.key/.crt), base64:
-base64 -w0 signing.zip | gh secret set NCWIN_SIGNING_KEYS -R mstan/nextcloud-server
+gh api -X PUT repos/mstan/nextcloud-server/actions/permissions -F enabled=true -f allowed_actions=all
+# Deploy key for the bots' pushes (GITHUB_TOKEN may not push workflow-file changes):
+ssh-keygen -t ed25519 -N "" -C ncwin-bot -f ncwin-deploy
+gh repo deploy-key add ncwin-deploy.pub -R mstan/nextcloud-server --allow-write -t ncwin-bot
+gh secret set NCWIN_DEPLOY_KEY -R mstan/nextcloud-server < ncwin-deploy && rm ncwin-deploy ncwin-deploy.pub
+# Upstream's own workflows register from the default branch; keep only ncwin-*:
+gh api --paginate repos/mstan/nextcloud-server/actions/workflows --jq '.workflows[] | select(.path | test("ncwin-") | not) | .id' |
+  xargs -I{} gh api -X PUT repos/mstan/nextcloud-server/actions/workflows/{}/disable
+# Optional, for signed CI builds (zip of core.key/.crt, windows_integration.key/.crt):
+#   base64 -w0 signing.zip | gh secret set NCWIN_SIGNING_KEYS -R mstan/nextcloud-server
 ```
 
-The signing root (`resources/codesigning/downstream-root.crt`) is public; its
-private key never leaves the maintainer's machine. Leaf keys are what CI holds.
+Without `NCWIN_SIGNING_KEYS`, CI builds are unsigned (`-NoSign`); build signed
+releases locally with `assemble.ps1`. Actions minutes are free for public repos.
 
 ## Point release (e.g. 35.0.2 → 35.0.3)
 

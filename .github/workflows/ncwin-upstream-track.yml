@@ -51,9 +51,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NEW: ${{ steps.detect.outputs.new_tag }}
           BRANCH: ${{ steps.detect.outputs.branch }}
+          DEPLOY_KEY: ${{ secrets.NCWIN_DEPLOY_KEY }}
         run: |
           git config user.name "ncwin-bot"
           git config user.email "ncwin-bot@users.noreply.github.com"
+          # GITHUB_TOKEN can never push changes to .github/workflows, and rebasing
+          # onto a new upstream release usually brings upstream workflow changes.
+          # Push with the repo's write deploy key instead (secret NCWIN_DEPLOY_KEY).
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "::error::secret NCWIN_DEPLOY_KEY is not set (see windows/UPSTREAM.md)"; exit 1
+          fi
+          mkdir -p ~/.ssh && printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git config core.sshCommand "ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes"
+          git remote set-url origin "git@github.com:$GITHUB_REPOSITORY.git"
           git switch "$BRANCH"
           old="v$(jq -r .nextcloud.version windows/build/deps.lock.json)"
           if ! git rebase --onto "$NEW" "$old" "$BRANCH"; then
@@ -70,6 +81,9 @@ jobs:
             windows/build/deps.lock.json > deps.tmp && mv deps.tmp windows/build/deps.lock.json
           git commit -am "win: track Nextcloud $ver"
           git push --force-with-lease origin "$BRANCH"
+          # master mirrors the current win/NN (it is the default branch, so the
+          # scheduled workflows run from it).
+          git push --force origin "$BRANCH:master"
 
   ci:
     needs: track
