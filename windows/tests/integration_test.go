@@ -16,6 +16,9 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
+	"image"
+	"image/color"
+	pngenc "image/png"
 	"io"
 	"net/http"
 	"os"
@@ -335,8 +338,17 @@ func TestVersionRestore(t *testing.T) {
 func TestPreview(t *testing.T) {
 	e := setup(t)
 	d := e.folder(t)
-	// 2x2 red PNG
-	png, _ := hex.DecodeString("89504e470d0a1a0a0000000d49484452000000020000000208020000fdd49a730000001449444154789c63f8cfc0f09f818181818181e1ff00001efb03fd2f54e94f0000000049454e44ae426082")
+	src := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	for x := 0; x < 64; x++ {
+		for y := 0; y < 64; y++ {
+			src.Set(x, y, color.RGBA{R: uint8(x * 4), G: uint8(y * 4), B: 128, A: 255})
+		}
+	}
+	var pngBuf bytes.Buffer
+	if err := pngenc.Encode(&pngBuf, src); err != nil {
+		t.Fatal(err)
+	}
+	png := pngBuf.Bytes()
 	e.expect(t, 201, "PUT", d+"/p.png", bytes.NewReader(png), nil)
 	_, b := e.do(t, "PROPFIND", d+"/p.png", strings.NewReader(`<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:fileid/></d:prop></d:propfind>`), map[string]string{"Depth": "0"})
 	m := regexp.MustCompile(`<oc:fileid>(\d+)</oc:fileid>`).FindSubmatch(b)
@@ -359,6 +371,10 @@ func TestExternalLocalMount(t *testing.T) {
 	}
 	dir := t.TempDir()
 	mount := fmt.Sprintf("/ext-%d", time.Now().UnixNano())
+	// files_external ships disabled; enabling it is idempotent.
+	if out, err := exec.Command(exe, "occ", "app:enable", "files_external").CombinedOutput(); err != nil {
+		t.Fatalf("enable files_external: %v %s", err, out)
+	}
 	out, err := exec.Command(exe, "occ", "files_external:create", mount, "local", "null::null", "-c", "datadir="+filepath.ToSlash(dir), "--output=json").CombinedOutput()
 	if err != nil {
 		t.Fatalf("create mount: %v %s", err, out)
