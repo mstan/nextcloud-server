@@ -28,6 +28,9 @@ class AppDirsWithDifferentOwnerTest extends TestCase {
 
 	protected function setUp(): void {
 		parent::setUp();
+		if (!function_exists('posix_getuid')) {
+			$this->markTestSkipped('needs POSIX file ownership (the check reports success without ext-posix)');
+		}
 
 		$this->l10n = $this->createMock(IL10N::class);
 		$this->l10n->expects($this->any())

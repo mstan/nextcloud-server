@@ -89,6 +89,9 @@ class LogFactoryTest extends TestCase {
 
 	#[\PHPUnit\Framework\Attributes\DataProvider('logFilePathProvider')]
 	public function testFileCustomPath($path, $expected): void {
+		if ($path === '/dev/null' && DIRECTORY_SEPARATOR === '\\') {
+			$this->markTestSkipped('Windows has no /dev/null');
+		}
 		$datadir = \OC::$SERVERROOT . '/data';
 		$defaultLog = $datadir . '/nextcloud.log';
 

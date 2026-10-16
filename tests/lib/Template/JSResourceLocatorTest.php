@@ -80,7 +80,7 @@ class JSResourceLocatorTest extends \Test\TestCase {
 		$new_apps_path = sys_get_temp_dir() . '/' . $apps_dirname;
 		$new_apps_path_symlink = $new_apps_path . '_link';
 		$this->assertTrue((
-			mkdir($new_apps_path) && symlink($apps_dirname, $new_apps_path_symlink)
+			mkdir($new_apps_path) && self::linkDirectory($apps_dirname, $new_apps_path_symlink)
 		), 'Setup of apps path failed');
 
 		// Create an app within that path
@@ -119,7 +119,7 @@ class JSResourceLocatorTest extends \Test\TestCase {
 		$this->assertEquals($expectedWebRoot, $webRoot);
 		$this->assertEquals($expectedFile, $file);
 
-		unlink($new_apps_path_symlink);
+		self::unlinkDirectory($new_apps_path_symlink);
 		$this->rrmdir($new_apps_path);
 	}
 
