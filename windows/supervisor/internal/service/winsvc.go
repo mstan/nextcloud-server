@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"unsafe"
 
+	"github.com/mstan/nextcloud-server/windows/supervisor/internal/db"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/eventlog"
@@ -41,10 +43,20 @@ func (h handler) Execute(_ []string, req <-chan svc.ChangeRequest, st chan<- svc
 			case svc.Interrogate:
 				st <- c.CurrentStatus
 			case svc.Stop, svc.Shutdown, svc.PreShutdown:
-				st <- svc.Status{State: svc.StopPending, WaitHint: uint32((3 * time.Minute).Milliseconds())}
+				// Keep reporting progress: a bundled database may need minutes to
+				// finish a checkpoint, and the SCM treats a silent StopPending
+				// as hung once WaitHint expires.
 				cancel()
-				<-done
-				return false, 0
+				tick := time.NewTicker(10 * time.Second)
+				for cp := uint32(1); ; cp++ {
+					st <- svc.Status{State: svc.StopPending, CheckPoint: cp, WaitHint: uint32((30 * time.Second).Milliseconds())}
+					select {
+					case <-done:
+						tick.Stop()
+						return false, 0
+					case <-tick.C:
+					}
+				}
 			}
 		}
 	}
@@ -104,6 +116,11 @@ func Install(cfgPath string) error {
 		return err
 	}
 	defer s.Close()
+	// Machine shutdown: ask for pre-shutdown notification with enough time for
+	// a clean database stop (default is 3 minutes).
+	if err := setPreshutdownTimeout(s, db.DBStopTimeout+time.Minute); err != nil {
+		return err
+	}
 	if err := s.SetRecoveryActions([]mgr.RecoveryAction{
 		{Type: mgr.ServiceRestart, Delay: 5 * time.Second},
 		{Type: mgr.ServiceRestart, Delay: 30 * time.Second},
@@ -178,4 +195,9 @@ func ServiceSID() (string, error) {
 		return "", err
 	}
 	return sid.String(), nil
+}
+
+func setPreshutdownTimeout(s *mgr.Service, d time.Duration) error {
+	info := struct{ Timeout uint32 }{uint32(d.Milliseconds())}
+	return windows.ChangeServiceConfig2(s.Handle, windows.SERVICE_CONFIG_PRESHUTDOWN_INFO, (*byte)(unsafe.Pointer(&info)))
 }

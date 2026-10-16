@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,6 +26,10 @@ type Spec struct {
 	Env  []string // appended to os.Environ()
 	Dir  string
 	Log  string // stdout+stderr file; rotated at LogMax bytes
+
+	// PreStart, if set, runs before every start; an error aborts that start
+	// (retried with backoff). Used to refuse ports something else holds.
+	PreStart func() error
 
 	// Ready, if set, is polled after start until it returns nil or ReadyTimeout passes.
 	Ready        func(ctx context.Context) error
@@ -77,6 +82,12 @@ func (c *Child) event(kind, msg string, f map[string]string) {
 
 // start launches the process once and waits for readiness.
 func (c *Child) start(ctx context.Context) error {
+	if c.spec.PreStart != nil {
+		if err := c.spec.PreStart(); err != nil {
+			c.event("proc.error", "pre-start: "+err.Error(), nil)
+			return err
+		}
+	}
 	logf, err := openLog(c.spec.Log)
 	if err != nil {
 		return err
@@ -268,4 +279,18 @@ func RunOnce(ctx context.Context, r *ring.Buffer, kind, source string, w io.Writ
 	}
 	r.Add(kind+".end", source, "", f)
 	return err
+}
+
+// PortsFree fails if any of ports already accepts connections on 127.0.0.1,
+// so a readiness probe can never be satisfied by somebody else's server
+// (another database, an SSH or Cloudflare tunnel, a second ncwin).
+func PortsFree(ports ...int) error {
+	for _, p := range ports {
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(p)), 500*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return fmt.Errorf("port %d is already in use by another program", p)
+		}
+	}
+	return nil
 }

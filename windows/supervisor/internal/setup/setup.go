@@ -102,6 +102,16 @@ func SeedConfig(c config.Config) map[string]any {
 // point where Nextcloud is installed; it refuses to re-install.
 func Run(ctx context.Context, c config.Config, o Options) error {
 	logf := func(f string, a ...any) { fmt.Fprintf(o.Log, f+"\n", a...) }
+	// Like the service: everything setup starts dies with it, so a database
+	// that failed to stop cleanly can never be left orphaned on its port.
+	job, err := proc.NewJob()
+	if err != nil {
+		return err
+	}
+	defer job.Close()
+	if err := job.AssignSelf(); err != nil {
+		return err
+	}
 	r := ring.New(4096)
 	if err := c.EnsureStateDirs(); err != nil {
 		return err

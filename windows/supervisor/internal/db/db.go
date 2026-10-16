@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -139,9 +138,11 @@ func CreateAppUser(ctx context.Context, c config.Config, logf *os.File) error {
 		cmd = exec.CommandContext(ctx, filepath.Join(binDir(c), "mariadb.exe"), "-h", "127.0.0.1", "-P", strconv.Itoa(d.Port), "-u", "root", "-e", sql)
 		cmd.Env = append(os.Environ(), "MYSQL_PWD="+super)
 	case "pgsql":
-		sql := fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s' CREATEDB; CREATE DATABASE "%s" OWNER "%s" TEMPLATE template0 ENCODING 'UTF8';`,
-			d.User, quote(d.Password), d.Name, d.User)
-		cmd = exec.CommandContext(ctx, filepath.Join(binDir(c), "psql.exe"), "-h", "127.0.0.1", "-p", strconv.Itoa(d.Port), "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-c", sql)
+		// Separate -c commands: psql runs a multi-statement -c in one
+		// transaction, and CREATE DATABASE refuses to run inside one.
+		createUser := fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s' CREATEDB`, d.User, quote(d.Password))
+		createDB := fmt.Sprintf(`CREATE DATABASE "%s" OWNER "%s" TEMPLATE template0 ENCODING 'UTF8'`, d.Name, d.User)
+		cmd = exec.CommandContext(ctx, filepath.Join(binDir(c), "psql.exe"), "-h", "127.0.0.1", "-p", strconv.Itoa(d.Port), "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-c", createUser, "-c", createDB)
 		cmd.Env = append(os.Environ(), "PGPASSWORD="+super)
 	default:
 		return fmt.Errorf("unsupported bundled type %q", d.Type)
@@ -151,16 +152,29 @@ func CreateAppUser(ctx context.Context, c config.Config, logf *os.File) error {
 	return cmd.Run()
 }
 
+// DBStopTimeout is how long a bundled server gets to shut down cleanly before
+// it is killed. Shutdown waits for any in-progress checkpoint, which on slow
+// disks has been measured at ~5 minutes; killing mid-checkpoint is the worst
+// outcome, so this is generous. The service's SCM wait hints cover it.
+const DBStopTimeout = 15 * time.Minute
+
 // Spec returns the supervised child for the bundled server.
 func Spec(c config.Config) (proc.Spec, error) {
 	logPath := filepath.Join(filepath.FromSlash(c.LogDir()), "db.log")
+	// Both servers accept TCP before they accept sessions ("the database
+	// system is starting up"), so readiness uses each server's own probe.
+	port := strconv.Itoa(c.Database.Port)
+	probe := map[string][]string{
+		"mysql": {"mariadb-admin.exe", "--host=127.0.0.1", "--port=" + port, "--connect-timeout=5", "ping"},
+		"pgsql": {"pg_isready.exe", "-h", "127.0.0.1", "-p", port, "-t", "5"},
+	}[c.Database.Type]
 	ready := func(ctx context.Context) error {
-		var d net.Dialer
-		conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(c.Database.Port)))
-		if err == nil {
-			conn.Close()
+		cmd := exec.CommandContext(ctx, filepath.Join(binDir(c), probe[0]), probe[1:]...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("%s: %v: %s", probe[0], err, strings.TrimSpace(string(out)))
 		}
-		return err
+		return nil
 	}
 	switch c.Database.Type {
 	case "mysql":
@@ -170,7 +184,7 @@ func Spec(c config.Config) (proc.Spec, error) {
 		return proc.Spec{
 			Name: "db", Path: filepath.Join(binDir(c), "mariadbd.exe"),
 			Args: []string{"--defaults-file=" + myIni(c), "--console"},
-			Log:  logPath, Ready: ready,
+			Log:  logPath, Ready: ready, PreStart: func() error { return proc.PortsFree(c.Database.Port) },
 			Stop: func(ctx context.Context) error {
 				super, err := readSecret(c)
 				if err != nil {
@@ -181,7 +195,7 @@ func Spec(c config.Config) (proc.Spec, error) {
 				cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 				return cmd.Run()
 			},
-			StopTimeout: 2 * time.Minute,
+			StopTimeout: DBStopTimeout,
 		}, nil
 	case "pgsql":
 		return proc.Spec{
@@ -189,13 +203,13 @@ func Spec(c config.Config) (proc.Spec, error) {
 			// postgres.exe refuses to run with administrative rights; the
 			// service account (NT SERVICE\ncwin) is unprivileged.
 			Args: []string{"-D", dataDir(c), "-p", strconv.Itoa(c.Database.Port), "-c", "listen_addresses=127.0.0.1"},
-			Log:  logPath, Ready: ready,
+			Log:  logPath, Ready: ready, PreStart: func() error { return proc.PortsFree(c.Database.Port) },
 			Stop: func(ctx context.Context) error {
 				cmd := exec.CommandContext(ctx, filepath.Join(binDir(c), "pg_ctl.exe"), "stop", "-D", dataDir(c), "-m", "fast", "-W")
 				cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 				return cmd.Run()
 			},
-			StopTimeout: 2 * time.Minute,
+			StopTimeout: DBStopTimeout,
 		}, nil
 	}
 	return proc.Spec{}, fmt.Errorf("unsupported bundled type %q", c.Database.Type)

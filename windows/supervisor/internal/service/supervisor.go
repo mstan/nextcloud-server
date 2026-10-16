@@ -150,13 +150,14 @@ func (s *Supervisor) waitTierStopped(specs []proc.Spec) {
 func (s *Supervisor) webSpec() proc.Spec {
 	gen := filepath.FromSlash(s.cfg.GeneratedDir())
 	return proc.Spec{
-		Name:  "web",
-		Path:  s.cfg.FrankenPHPExe(),
-		Args:  []string{"run", "--config", filepath.Join(gen, "Caddyfile"), "--adapter", "caddyfile"},
-		Env:   nc.PHPEnv(s.cfg),
-		Dir:   filepath.FromSlash(s.cfg.PHPDir()),
-		Log:   filepath.Join(filepath.FromSlash(s.cfg.LogDir()), "web.log"),
-		Ready: func(ctx context.Context) error { return webReady(ctx, s.cfg) },
+		Name:     "web",
+		Path:     s.cfg.FrankenPHPExe(),
+		Args:     []string{"run", "--config", filepath.Join(gen, "Caddyfile"), "--adapter", "caddyfile"},
+		Env:      nc.PHPEnv(s.cfg),
+		Dir:      filepath.FromSlash(s.cfg.PHPDir()),
+		Log:      filepath.Join(filepath.FromSlash(s.cfg.LogDir()), "web.log"),
+		Ready:    func(ctx context.Context) error { return webReady(ctx, s.cfg) },
+		PreStart: func() error { return proc.PortsFree(append(SitePorts(s.cfg), s.cfg.Web.HTTPPort)...) },
 	}
 }
 
