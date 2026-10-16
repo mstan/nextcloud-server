@@ -159,7 +159,7 @@ class ObjectTree extends CachingTree {
 			throw new \Sabre\DAV\Exception\ServiceUnavailable('filesystem not setup');
 		}
 
-		$info = $this->fileView->getFileInfo(dirname($destinationPath));
+		$info = $this->fileView->getFileInfo(\OC\Files\Utils\PathHelper::dirname($destinationPath));
 		if ($this->fileView->file_exists($destinationPath)) {
 			$destinationPermission = $info && $info->isUpdateable();
 		} else {

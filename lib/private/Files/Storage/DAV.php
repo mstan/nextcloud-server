@@ -731,7 +731,7 @@ class DAV extends Common {
 						$tmpFile = $this->getCachedFile($path);
 					}
 				} else {
-					if (!$this->isCreatable(dirname($path))) {
+					if (!$this->isCreatable(\OC\Files\Utils\PathHelper::dirname($path))) {
 						return false;
 					}
 					$tmpFile = $tempManager->getTemporaryFile($ext);

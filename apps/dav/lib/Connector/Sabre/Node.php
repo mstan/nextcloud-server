@@ -351,7 +351,7 @@ abstract class Node implements INode {
 		try {
 			$path ??= $this->info->getPath();
 			$this->fileView->verifyPath(
-				dirname($path),
+				\OC\Files\Utils\PathHelper::dirname($path),
 				basename($path),
 			);
 		} catch (InvalidPathException $invalidPathException) {

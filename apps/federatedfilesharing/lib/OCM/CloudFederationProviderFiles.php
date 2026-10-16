@@ -612,7 +612,7 @@ class CloudFederationProviderFiles implements ISignedCloudFederationProvider {
 		} catch (NotFoundException $e) {
 			$file = null;
 		}
-		$args = Filesystem::is_dir($file) ? ['dir' => $file] : ['dir' => dirname($file), 'scrollto' => $file];
+		$args = Filesystem::is_dir($file) ? ['dir' => $file] : ['dir' => \OC\Files\Utils\PathHelper::dirname($file), 'scrollto' => $file];
 		$urlGenerator = Server::get(IURLGenerator::class);
 		$link = $urlGenerator->getAbsoluteURL(
 			$urlGenerator->linkTo('files', 'index.php', $args)

@@ -105,11 +105,11 @@ class Manager implements IManager {
 		if ($userFolder->nodeExists($path)) {
 			throw new \RuntimeException('File already exists');
 		} else {
-			if (!$userFolder->nodeExists(dirname($path))) {
+			if (!$userFolder->nodeExists(\OC\Files\Utils\PathHelper::dirname($path))) {
 				throw new \RuntimeException('Invalid path');
 			}
 			/** @var Folder $folder */
-			$folder = $userFolder->get(dirname($path));
+			$folder = $userFolder->get(\OC\Files\Utils\PathHelper::dirname($path));
 			$file = $folder->newFile(basename($path));
 			$editor = $this->getEditor($editorId);
 			$creators = $editor->getCreators();

@@ -145,11 +145,11 @@ class ConversionManager implements IConversionManager {
 	}
 
 	private function checkDestination(string $destination): void {
-		if (!$this->rootFolder->nodeExists(dirname($destination))) {
+		if (!$this->rootFolder->nodeExists(\OC\Files\Utils\PathHelper::dirname($destination))) {
 			throw new ForbiddenException($this->l10n->t('Destination does not exist'));
 		}
 
-		$folder = $this->rootFolder->get(dirname($destination));
+		$folder = $this->rootFolder->get(\OC\Files\Utils\PathHelper::dirname($destination));
 		if (!$folder->isCreatable()) {
 			throw new ForbiddenException($this->l10n->t('Destination is not creatable'));
 		}

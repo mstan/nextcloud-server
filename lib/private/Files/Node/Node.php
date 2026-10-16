@@ -292,7 +292,7 @@ class Node implements INode {
 	#[\Override]
 	public function getParent(): INode|IRootFolder {
 		if ($this->parent === null) {
-			$newPath = dirname($this->path);
+			$newPath = \OC\Files\Utils\PathHelper::dirname($this->path);
 			if ($newPath === '' || $newPath === '.' || $newPath === '/') {
 				return $this->root;
 			}
@@ -433,7 +433,7 @@ class Node implements INode {
 	#[\Override]
 	public function copy($targetPath) {
 		$targetPath = $this->normalizePath($targetPath);
-		$parent = $this->root->get(dirname($targetPath));
+		$parent = $this->root->get(\OC\Files\Utils\PathHelper::dirname($targetPath));
 		if ($parent instanceof Folder && $this->isValidPath($targetPath) && $parent->isCreatable()) {
 			$nonExisting = $this->createNonExistingNode($targetPath);
 			$this->sendHooks(['preCopy'], [$this, $nonExisting]);
@@ -461,7 +461,7 @@ class Node implements INode {
 	#[\Override]
 	public function move($targetPath) {
 		$targetPath = $this->normalizePath($targetPath);
-		$parent = $this->root->get(dirname($targetPath));
+		$parent = $this->root->get(\OC\Files\Utils\PathHelper::dirname($targetPath));
 		if (
 			($parent instanceof Folder)
 			&& $this->isValidPath($targetPath)

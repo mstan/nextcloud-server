@@ -320,7 +320,7 @@ class Storage implements IStorage {
 	 * @return bool
 	 */
 	private function setKey($path, $key) {
-		$this->keySetPreparation(dirname($path));
+		$this->keySetPreparation(\OC\Files\Utils\PathHelper::dirname($path));
 
 		$versionFromBeforeUpdate = $this->config->getSystemValueString('version', '0.0.0.0');
 		if (version_compare($versionFromBeforeUpdate, '20.0.0.1', '<=')) {
@@ -355,7 +355,7 @@ class Storage implements IStorage {
 		$targetPath = $this->getPathToKeys($target);
 
 		if ($this->view->file_exists($sourcePath)) {
-			$this->keySetPreparation(dirname($targetPath));
+			$this->keySetPreparation(\OC\Files\Utils\PathHelper::dirname($targetPath));
 			$this->clearCachedKeysBelow($sourcePath);
 			$this->clearCachedKeysBelow($targetPath);
 			$this->view->rename($sourcePath, $targetPath);
@@ -379,7 +379,7 @@ class Storage implements IStorage {
 		$targetPath = $this->getPathToKeys($target);
 
 		if ($this->view->file_exists($sourcePath)) {
-			$this->keySetPreparation(dirname($targetPath));
+			$this->keySetPreparation(\OC\Files\Utils\PathHelper::dirname($targetPath));
 			$this->clearCachedKeysBelow($targetPath);
 			$this->view->copy($sourcePath, $targetPath);
 			return true;

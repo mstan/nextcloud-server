@@ -56,7 +56,7 @@ class ShareTargetValidator {
 		array $childShares,
 	): string {
 		$mountPoint = basename($share->getTarget());
-		$parent = dirname($share->getTarget());
+		$parent = \OC\Files\Utils\PathHelper::dirname($share->getTarget());
 
 		$recipientView = $this->getViewForUser($user);
 		$event = new VerifyMountPointEvent($share, $recipientView, $parent, $user);
@@ -122,7 +122,7 @@ class ShareTargetValidator {
 		$pathInfo = pathinfo($absolutePath);
 		$ext = isset($pathInfo['extension']) ? '.' . $pathInfo['extension'] : '';
 		$name = $pathInfo['filename'];
-		$dir = $pathInfo['dirname'];
+		$dir = \OC\Files\Utils\PathHelper::dirname($absolutePath);
 
 		$i = 2;
 		$parentCache = $parentMount->getStorage()->getCache();

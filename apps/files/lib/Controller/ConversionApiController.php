@@ -69,7 +69,7 @@ class ConversionApiController extends OCSController {
 
 		if ($destination !== null) {
 			$destination = PathHelper::normalizePath($destination);
-			$parentDir = dirname($destination);
+			$parentDir = \OC\Files\Utils\PathHelper::dirname($destination);
 
 			if (!$userFolder->nodeExists($parentDir)) {
 				throw new OCSNotFoundException($this->l10n->t('The destination path does not exist: %1$s', [$parentDir]));

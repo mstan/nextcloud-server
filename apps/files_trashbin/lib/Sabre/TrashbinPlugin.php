@@ -178,7 +178,7 @@ class TrashbinPlugin extends ServerPlugin {
 		}
 
 		$userFolder = $this->rootFolder->getUserFolder($fileInfo->getUser()->getUID());
-		$originalPath = $userFolder->getFullPath(dirname($fileInfo->getOriginalLocation()));
+		$originalPath = $userFolder->getFullPath(\OC\Files\Utils\PathHelper::dirname($fileInfo->getOriginalLocation()));
 
 		// Since the parent folder might no longer exist, we don't try to get the parent node to check the free space
 		// instead we resolve the mount where the restore would go to, and check that for the free space

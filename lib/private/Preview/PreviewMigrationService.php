@@ -341,7 +341,7 @@ class PreviewMigrationService {
 					))
 					->executeStatement();
 
-				$current = dirname($current);
+				$current = \OC\Files\Utils\PathHelper::dirname($current);
 				if ($current === '/' || $current === '.' || $current === '') {
 					break;
 				}

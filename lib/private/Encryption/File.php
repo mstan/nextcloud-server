@@ -73,7 +73,7 @@ class File implements IFile {
 
 		// first get the shares for the parent and cache the result so that we don't
 		// need to check all parents for every file
-		$parent = dirname($ownerPath);
+		$parent = \OC\Files\Utils\PathHelper::dirname($ownerPath);
 		if (isset($this->cache[$parent])) {
 			$resultForParents = $this->cache[$parent];
 		} else {
@@ -123,7 +123,7 @@ class File implements IFile {
 			try {
 				return $userFolder->get($path);
 			} catch (NotFoundException) {
-				$parent = dirname($path);
+				$parent = \OC\Files\Utils\PathHelper::dirname($path);
 				if ($parent === $path) {
 					return null;
 				}

@@ -221,7 +221,7 @@ class Encryption extends Wrapper {
 
 		$sharePath = $this->fullPath;
 		if (!$this->storage->file_exists($this->internalPath)) {
-			$sharePath = dirname($sharePath);
+			$sharePath = \OC\Files\Utils\PathHelper::dirname($sharePath);
 		}
 
 		$accessList = [];

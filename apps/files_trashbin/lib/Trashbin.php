@@ -191,7 +191,7 @@ class Trashbin implements IEventListener {
 		self::setUpTrash($owner);
 
 		$targetFilename = basename($targetPath);
-		$targetLocation = dirname($targetPath);
+		$targetLocation = \OC\Files\Utils\PathHelper::dirname($targetPath);
 
 		$sourceFilename = basename($sourcePath);
 
@@ -263,7 +263,7 @@ class Trashbin implements IEventListener {
 		$path_parts = pathinfo($ownerPath);
 
 		$filename = $path_parts['basename'];
-		$location = $path_parts['dirname'];
+		$location = \OC\Files\Utils\PathHelper::dirname($ownerPath);
 		/** @var ITimeFactory $timeFactory */
 		$timeFactory = Server::get(ITimeFactory::class);
 		$timestamp = $timeFactory->getTime();
@@ -560,7 +560,7 @@ class Trashbin implements IEventListener {
 		$mtime = $view->filemtime($source);
 
 		// restore file
-		if (!$view->isCreatable(dirname($target))) {
+		if (!$view->isCreatable(\OC\Files\Utils\PathHelper::dirname($target))) {
 			throw new NotPermittedException("Can't restore trash item because the target folder is not writable");
 		}
 
@@ -1099,7 +1099,7 @@ class Trashbin implements IEventListener {
 			Server::get(IDBConnection::class)->getQueryBuilder(),
 			Server::get(IFilesMetadataManager::class),
 		);
-		$normalizedParentPath = ltrim(Filesystem::normalizePath(dirname('files_trashbin/versions/' . $filename)), '/');
+		$normalizedParentPath = ltrim(Filesystem::normalizePath(\OC\Files\Utils\PathHelper::dirname('files_trashbin/versions/' . $filename)), '/');
 		$parentId = $cache->getId($normalizedParentPath);
 		if ($parentId === -1) {
 			return [];

@@ -162,6 +162,6 @@ class PermissionsMask extends Wrapper {
 	 * If source and target are compatible with a rename/move operation of a partial file into its final location
 	 */
 	protected function isPartialFileMove(string $source, string $target): bool {
-		return str_starts_with(dirname($target), dirname($source)) && preg_match('/\.ocTransferId\d+\.part$/i', $source) === 1;
+		return str_starts_with(\OC\Files\Utils\PathHelper::dirname($target), \OC\Files\Utils\PathHelper::dirname($source)) && preg_match('/\.ocTransferId\d+\.part$/i', $source) === 1;
 	}
 }

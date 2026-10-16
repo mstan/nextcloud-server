@@ -201,7 +201,7 @@ class FilesSearchProvider implements IFilteringProvider {
 	private function formatSubline(string $path): string {
 		// Do not show the location if the file is in root
 		if (strrpos($path, '/') > 0) {
-			$path = ltrim(dirname($path), '/');
+			$path = ltrim(\OC\Files\Utils\PathHelper::dirname($path), '/');
 			return $this->l10n->t('in %s', [$path]);
 		} else {
 			return '';

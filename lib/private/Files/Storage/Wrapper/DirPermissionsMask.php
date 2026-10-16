@@ -103,7 +103,7 @@ class DirPermissionsMask extends PermissionsMask {
 				return $this->storage->rename($source, $target);
 			}
 		} else {
-			$parent = dirname($target);
+			$parent = \OC\Files\Utils\PathHelper::dirname($target);
 			if ($parent === '.') {
 				$parent = '';
 			}
@@ -127,7 +127,7 @@ class DirPermissionsMask extends PermissionsMask {
 				return $this->storage->copy($source, $target);
 			}
 		} else {
-			$parent = dirname($target);
+			$parent = \OC\Files\Utils\PathHelper::dirname($target);
 			if ($parent === '.') {
 				$parent = '';
 			}

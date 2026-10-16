@@ -119,7 +119,7 @@ class SanitizeFilenames {
 				$newName = $this->filenameValidator->sanitizeFilename($oldName, $this->charReplacement);
 				if ($oldName !== $newName) {
 					$newName = $folder->getNonExistingName($newName);
-					$path = rtrim(dirname($node->getPath()), '/');
+					$path = rtrim(\OC\Files\Utils\PathHelper::dirname($node->getPath()), '/');
 
 					if (!$this->dryRun) {
 						$node->move("$path/$newName");

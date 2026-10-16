@@ -148,7 +148,7 @@ class FileSystemTags implements ICheck, IFileCheck {
 	}
 
 	protected function dirname($path) {
-		$dir = dirname($path);
+		$dir = \OC\Files\Utils\PathHelper::dirname($path);
 		return $dir === '.' ? '' : $dir;
 	}
 

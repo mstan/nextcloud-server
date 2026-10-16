@@ -103,7 +103,7 @@ class Folder extends Node implements IFolder {
 		} else {
 			$isDir = $info->getType() === FileInfo::TYPE_FOLDER;
 		}
-		$parent = dirname($path) === $this->getPath() ? $this : null;
+		$parent = \OC\Files\Utils\PathHelper::dirname($path) === $this->getPath() ? $this : null;
 		if ($isDir) {
 			return new Folder($this->root, $this->view, $path, $info, $parent, $infoHasSubMountsIncluded);
 		} else {
@@ -153,7 +153,7 @@ class Folder extends Node implements IFolder {
 					}
 				}
 			}
-			$parent = dirname($fullPath) === $this->getPath() ? $this : null;
+			$parent = \OC\Files\Utils\PathHelper::dirname($fullPath) === $this->getPath() ? $this : null;
 			$node = new Folder($this->root, $this->view, $fullPath, null, $parent);
 			$this->sendHooks(['postWrite', 'postCreate'], [$node]);
 			return $node;
@@ -568,7 +568,7 @@ class Folder extends Node implements IFolder {
 					return $folder;
 				}
 			} catch (NotFoundException) {
-				$folder = dirname($path) === '.' ? $this : $this->get(dirname($path));
+				$folder = \OC\Files\Utils\PathHelper::dirname($path) === '.' ? $this : $this->get(\OC\Files\Utils\PathHelper::dirname($path));
 				if (!($folder instanceof Folder)) {
 					throw new NotPermittedException("Unable to create folder $path. Parent is not a directory.");
 				}

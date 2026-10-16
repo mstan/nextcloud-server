@@ -122,7 +122,7 @@ class OwnershipTransferService {
 
 			$finalTarget = "$destinationUid/files/" . $this->sanitizeFolderName($l->t('Transferred from %1$s on %2$s', [$cleanUserName, $date]));
 			try {
-				$view->verifyPath(dirname($finalTarget), basename($finalTarget));
+				$view->verifyPath(\OC\Files\Utils\PathHelper::dirname($finalTarget), basename($finalTarget));
 			} catch (InvalidPathException $e) {
 				$finalTarget = "$destinationUid/files/" . $this->sanitizeFolderName($l->t('Transferred from %1$s on %2$s', [$sourceUid, $date]));
 			}

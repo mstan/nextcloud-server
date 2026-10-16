@@ -57,7 +57,7 @@ class Update {
 	 * e.g. to update the encryption keys
 	 */
 	public function postRename(OCPFile|Folder $source, OCPFile|Folder $target): void {
-		if (dirname($source->getPath()) !== dirname($target->getPath())) {
+		if (\OC\Files\Utils\PathHelper::dirname($source->getPath()) !== \OC\Files\Utils\PathHelper::dirname($target->getPath())) {
 			$this->update($target);
 		}
 	}
