@@ -5,9 +5,9 @@ name: ncwin CI
 
 on:
   push:
-    branches: ['win/**']
+    branches: ['master', 'win/**']
   pull_request:
-    branches: ['win/**']
+    branches: ['master', 'win/**']
   workflow_dispatch:
   workflow_call:
 

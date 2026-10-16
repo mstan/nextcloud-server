@@ -23,9 +23,17 @@ jobs:
       - name: Rebase onto upstream master
         env:
           GH_TOKEN: ${{ github.token }}
+          DEPLOY_KEY: ${{ secrets.NCWIN_DEPLOY_KEY }}
         run: |
           git config user.name "ncwin-bot"
           git config user.email "ncwin-bot@users.noreply.github.com"
+          # Push with the deploy key: GITHUB_TOKEN cannot push workflow changes (see ncwin-upstream-track.yml).
+          if [ -n "$DEPLOY_KEY" ]; then
+            mkdir -p ~/.ssh && printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+            ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+            git config core.sshCommand "ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes"
+            git remote set-url origin "git@github.com:$GITHUB_REPOSITORY.git"
+          fi
           git fetch --no-tags https://github.com/nextcloud/server.git "+refs/tags/v*:refs/tags/v*" "+refs/heads/master:refs/remotes/upstream/master"
           base="v$(jq -r .nextcloud.version windows/build/deps.lock.json)"
           git switch -C win/canary
