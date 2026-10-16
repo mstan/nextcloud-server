@@ -62,9 +62,55 @@ jobs:
           if ($bad) { throw "$bad file(s) fail php -l" }
           "linted $($files.Count) files"
 
+  phpunit-windows:
+    # Upstream's own PHPUnit suites for the code the patch set touches, on
+    # Windows with the PHP we ship. Only failures listed in
+    # windows/tests/phpunit-known-upstream.txt (which also fail on stock
+    # Linux) are tolerated.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: PHP runtime + PHPUnit
+        shell: pwsh
+        run: |
+          $lock = Get-Content windows/build/deps.lock.json -Raw | ConvertFrom-Json
+          $php = Join-Path $env:RUNNER_TEMP 'php'
+          foreach ($d in @(@{u = $lock.frankenphp.url; s = $lock.frankenphp.sha256; to = $php}, @{u = $lock.pecl.apcu.url; s = $lock.pecl.apcu.sha256; to = "$php-apcu"})) {
+            Invoke-WebRequest $d.u -OutFile dl.zip
+            if ((Get-FileHash dl.zip -Algorithm SHA256).Hash -ne $d.s.ToUpper()) { throw "hash mismatch: $($d.u)" }
+            New-Item -ItemType Directory -Force $d.to | Out-Null
+            & "$env:SystemRoot\System32\tar.exe" -xf dl.zip -C $d.to
+          }
+          Copy-Item "$php-apcu\php_apcu.dll" "$php\ext\"
+          $ext = "$php\ext" -replace '\\', '/'
+          @('[PHP]', "extension_dir = `"$ext`"", 'memory_limit = 4G',
+            'extension = curl', 'extension = fileinfo', 'extension = gd', 'extension = gmp', 'extension = intl',
+            'extension = mbstring', 'extension = exif', 'extension = openssl', 'extension = sodium', 'extension = zip',
+            'extension = pdo_sqlite', 'extension = apcu', 'apc.enable_cli = 1', 'opcache.enable_cli = 0') |
+            Set-Content -Encoding ASCII "$php\php.ini"
+          "PHPRC=$php" | Out-File -Append $env:GITHUB_ENV
+          "OPENSSL_CONF=$php\extras\ssl\openssl.cnf" | Out-File -Append $env:GITHUB_ENV
+          "$php" | Out-File -Append $env:GITHUB_PATH
+          Invoke-WebRequest https://getcomposer.org/download/2.8.12/composer.phar -OutFile composer.phar
+          & "$php\php.exe" composer.phar install -d vendor-bin/phpunit --no-interaction --no-progress
+      - name: Fresh test instance
+        shell: pwsh
+        run: |
+          $data = Join-Path $env:RUNNER_TEMP 'ncdata'
+          php occ maintenance:install --database=sqlite --admin-user=admin --admin-pass=admin "--data-dir=$($data -replace '\\','/')"
+          php tests/enable_all.php
+      - name: Upstream suites
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/junit"
+          sh windows/tests/phpunit-windows.sh php "$RUNNER_TEMP/junit" || true
+          python windows/tests/junit_check.py "$RUNNER_TEMP/junit"
+
   assemble:
     runs-on: windows-latest
-    needs: [supervisor, php-lint, windows-lint]
+    needs: [supervisor, php-lint, windows-lint, phpunit-windows]
     env:
       # `secrets` is not available in step conditions; expose presence via env.
       HAS_SIGNING_KEYS: ${{ secrets.NCWIN_SIGNING_KEYS != '' }}
@@ -134,8 +180,21 @@ jobs:
           & $exe shutdown
           $p.WaitForExit(900000) | Out-Null
           if ($code) { throw 'integration tests failed' }
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2 WixToolset.Util.wixext/5.0.2 WixToolset.Firewall.wixext/5.0.2
+          $b = Join-Path $env:RUNNER_TEMP 'build'
+          Remove-Item -Recurse -Force "$b\state", "$b\data" -ErrorAction SilentlyContinue
+          ./windows/build/build-msi.ps1 -Payload "$b\out\ncwin" -WinBuild 1 -Out "$b\msi\ncwin.msi"
       - uses: actions/upload-artifact@v4
         with:
           name: ncwin
           path: ${{ runner.temp }}/build/out/ncwin
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ncwin-msi
+          path: ${{ runner.temp }}/build/msi
           retention-days: 7
