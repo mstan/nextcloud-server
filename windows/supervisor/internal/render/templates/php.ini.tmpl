@@ -45,7 +45,14 @@ extension = imagick
 [opcache]
 ; OPcache is built into PHP 8.5; no zend_extension line.
 opcache.enable = 1
-opcache.enable_cli = 1
+; Windows shares one OPcache segment between PHP processes; a process that
+; maps php8ts.dll at a different address than the segment's creator dies with
+; "Opcode handlers are unusable due to ASLR". CLI runs (occ, cron, the watcher's
+; applier) are short or I/O-bound, so they get no shared cache at all, and the
+; web server falls back to a file cache if it ever hits the same condition.
+opcache.enable_cli = 0
+opcache.file_cache = "{{.TempDir}}/opcache"
+opcache.file_cache_fallback = 1
 opcache.memory_consumption = 256
 opcache.interned_strings_buffer = 32
 opcache.max_accelerated_files = 20000
