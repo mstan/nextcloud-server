@@ -4,5 +4,6 @@
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends litmus ca-certificates && rm -rf /var/lib/apt/lists/*
 # Nextcloud's upstream CI runs the same suites (see .github/workflows/integration-litmus.yml).
-ENV TESTS="basic copymove props largefile"
+# largefile is not packaged by Debian; windows/tests TestChunkedUpload covers large files.
+ENV TESTS="basic copymove props"
 ENTRYPOINT ["litmus", "-k"]
