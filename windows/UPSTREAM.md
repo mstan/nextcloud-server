@@ -116,6 +116,9 @@ Release-only apps (not in this repo, e.g. `recommendations`, `photos`, `serverin
 ### Disproved (do not re-investigate)
 
 - "Install hangs": the first hang was `findWebRoot()` at a drive root, the second `dirname('/x') === '\'`; the remaining slowness was SQLite fsync on a slow disk (CPU idle, WAL growing).
-- `files_sharing` `CacheTest::testShareRenameOriginalFileInRecentResults` failing on Windows: stale state in a reused test instance (users with a last-login but no skeleton); passes on a fresh instance.
+
+### Open
+
+- `files_sharing` `CacheTest::testShareRenameOriginalFileInRecentResults` fails intermittently on Windows (recipient's recent files lack the skeleton `welcome.txt`). Seen in 2 of 3 full runs (`phpunit-windows.sh`), never when the suite or file runs alone, never on Linux. Not stale state: it failed on a fresh instance, where user3 had `lastLogin = 0` and no home. Instrumented `copySkeleton()` in a passing run shows it is called with the skeleton found and free space > 0. Next step: instrument a *failing* run (likely an exception swallowed by `UserFirstTimeLoggedInListener` or an ordering race with the share mount).
 - `files_trashbin` `StorageTest::testDeleteVersionsOfFileAsRecipient`: flaky upstream (also fails on stock Linux sometimes).
 - `ObjectStore\LocalTest` "not allowed to access the database": upstream test-isolation issue when the file runs alone (stock Linux too).
