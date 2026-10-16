@@ -52,7 +52,7 @@ nightly_scan = "03:30"   # full reconciliation scan; "" disables
 
 [ring]
 capacity = 65536         # events kept in memory for `ncwin events`
-journal_mb = 64          # also kept on disk (logevents.jsonl + .1), surviving restarts; 0 = memory only
+journal_mb = 64          # also kept on disk (log\events.jsonl + .1), surviving restarts; 0 = memory only
 
 [update]
 #repo = "mstan/nextcloud-server"  # GitHub releases `ncwin update` installs from
