@@ -53,6 +53,9 @@ abstract class Storage extends \Test\TestCase {
 
 	#[\PHPUnit\Framework\Attributes\DataProvider('directoryProvider')]
 	public function testDirectories($directory): void {
+		if (DIRECTORY_SEPARATOR === '\\' && $this->instance->isLocal() && str_ends_with($directory, ' ')) {
+			$this->markTestSkipped('NTFS strips trailing spaces from names; Windows-compatible filename rules forbid them');
+		}
 		$this->assertFalse($this->instance->file_exists('/' . $directory));
 
 		$this->assertTrue($this->instance->mkdir('/' . $directory));
