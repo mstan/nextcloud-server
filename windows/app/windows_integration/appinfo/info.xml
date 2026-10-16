@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!--
+  - SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	  xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>windows_integration</id>
+	<name>Windows integration</name>
+	<summary>Keeps Nextcloud in sync with direct NTFS edits when running under ncwin.</summary>
+	<description>Companion app for the ncwin Windows service. Provides the occ commands the service uses to apply file-system change notifications and to self-test the Windows platform.</description>
+	<version>1.0.0</version>
+	<licence>agpl</licence>
+	<author>ncwin</author>
+	<namespace>WindowsIntegration</namespace>
+	<category>tools</category>
+	<bugs>https://github.com/mstan/nextcloud-server/issues</bugs>
+	<dependencies>
+		<php min-version="8.3" />
+		<nextcloud min-version="35" max-version="35"/>
+	</dependencies>
+	<commands>
+		<command>OCA\WindowsIntegration\Command\ApplyChanges</command>
+		<command>OCA\WindowsIntegration\Command\WatchRoots</command>
+		<command>OCA\WindowsIntegration\Command\SelfTest</command>
+	</commands>
+</info>

@@ -1,0 +1,54 @@
+# ncwin configuration. Default location: C:\ProgramData\ncwin\ncwin.toml
+# After editing, restart the service: ncwin stop && ncwin start
+
+[paths]
+install_dir = 'C:\Program Files\ncwin'   # php\, nextcloud\, ncwin.exe (read-only)
+state_dir   = 'C:\ProgramData\ncwin'     # config, logs, temp, certificates, bundled DB data
+data_dir    = 'D:\NextcloudData'         # Nextcloud data directory (keep the path short)
+
+[web]
+# Global ports. ACME (Let's Encrypt) challenges are answered on these, so for
+# a public site they must be reachable from the internet as 80/443, directly
+# or via port forwarding.
+http_port  = 80
+https_port = 443
+php_threads  = 0        # 0 = 2 x CPU cores
+upload_max   = "16G"
+memory_limit = "1G"
+timezone     = "UTC"
+acme_email   = ""       # required for tls = "acme"
+imagick      = false    # previews for HEIC/SVG/etc.
+
+# One [[web.site]] per way of reaching the server. Each address may carry its
+# own port; ports differing from http_port/https_port are fine for "internal"
+# and "off" sites.
+
+# LAN / VPN: certificate from ncwin's own CA (trust it on clients once).
+[[web.site]]
+addresses = ["https://nextcloud.lan:8443", "https://192.168.1.10:8443"]
+tls = "internal"
+
+# Public internet: automatic Let's Encrypt certificate.
+#[[web.site]]
+#addresses = ["cloud.example.com"]
+#tls = "acme"
+
+[database]
+type = "sqlite"          # sqlite | mysql | pgsql
+#mode = "bundled"        # bundled (ncwin runs it) | external
+#host = "127.0.0.1"
+#port = 3306
+#name = "nextcloud"
+#user = "nextcloud"
+#password = ""
+
+[cron]
+interval = "5m"
+
+[watcher]
+enabled = true           # pick up files changed directly on disk
+debounce = "2s"
+nightly_scan = "03:30"   # full reconciliation scan; "" disables
+
+[ring]
+capacity = 65536         # events kept in memory for `ncwin events`

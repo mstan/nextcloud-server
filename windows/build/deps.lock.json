@@ -1,0 +1,25 @@
+{
+  "nextcloud": {
+    "version": "35.0.2",
+    "url": "https://download.nextcloud.com/server/releases/nextcloud-35.0.2.zip",
+    "sha256": "2f1dcec6a7cdab70346e80a823ccaaa2001a6085013d9f2ae0a2606fa38c2835"
+  },
+  "frankenphp": {
+    "version": "1.13.0",
+    "php": "8.5.11-ts-vs17-x64",
+    "url": "https://github.com/php/frankenphp/releases/download/v1.13.0/frankenphp-windows-x86_64.zip",
+    "sha256": "6b952e1a43dd64f7c5defcffd511ac0f9e548402495fd18946b0ebcdd679c840"
+  },
+  "pecl": {
+    "apcu": {
+      "version": "5.1.28",
+      "url": "https://downloads.php.net/~windows/pecl/releases/apcu/5.1.28/php_apcu-5.1.28-8.5-ts-vs17-x64.zip",
+      "sha256": "ade68cbc6ace5002a2ecac3fda9ab38ec188d4322dd83d6867213ab8411951f0"
+    },
+    "imagick": {
+      "version": "3.8.1",
+      "url": "https://downloads.php.net/~windows/pecl/releases/imagick/3.8.1/php_imagick-3.8.1-8.5-ts-vs17-x64.zip",
+      "sha256": "7b49056f176fc6d41a59b12ea6e0a8bc45fd1e4c47751a3e7e57dc4cb5e73630"
+    }
+  }
+}
