@@ -13,7 +13,10 @@ import (
 // Job is a Windows Job Object configured to kill every assigned process when
 // the last handle closes, i.e. when ncwin exits for any reason (including a
 // crash). Children therefore cannot outlive the service.
-type Job struct{ h windows.Handle }
+type Job struct {
+	h    windows.Handle
+	self bool // the current process is a member
+}
 
 func NewJob() (*Job, error) {
 	h, err := windows.CreateJobObject(nil, nil)
@@ -37,7 +40,11 @@ func NewJob() (*Job, error) {
 // afterwards inherit membership at creation time, so there is no window in
 // which a child (or grandchild) runs outside the job.
 func (j *Job) AssignSelf() error {
-	return windows.AssignProcessToJobObject(j.h, windows.CurrentProcess())
+	if err := windows.AssignProcessToJobObject(j.h, windows.CurrentProcess()); err != nil {
+		return err
+	}
+	j.self = true
+	return nil
 }
 
 // Assign puts p (and, by inheritance, everything it spawns) into the job.
@@ -50,7 +57,16 @@ func (j *Job) Assign(p *os.Process) error {
 	return windows.AssignProcessToJobObject(j.h, ph)
 }
 
-func (j *Job) Close() error { return windows.CloseHandle(j.h) }
+// Close releases the job. Once the current process is a member it does
+// nothing: closing the last handle would terminate this process too, with
+// exit code 0, hiding any error it was about to report. The kernel closes the
+// handle when the process exits, which then kills whatever is left in the job.
+func (j *Job) Close() error {
+	if j.self {
+		return nil
+	}
+	return windows.CloseHandle(j.h)
+}
 
 // ProcessAlive reports whether a process with this PID currently exists.
 func ProcessAlive(pid int) bool {

@@ -128,11 +128,17 @@ func (c *Config) Validate() error {
 	var errs []string
 	add := func(f string, a ...any) { errs = append(errs, fmt.Sprintf(f, a...)) }
 
-	for name, p := range map[string]string{"install_dir": c.Paths.InstallDir, "state_dir": c.Paths.StateDir, "data_dir": c.Paths.DataDir} {
-		if p == "" {
-			add("paths.%s is required", name)
-		} else if !filepath.IsAbs(p) {
-			add("paths.%s must be absolute: %q", name, p)
+	for _, f := range []struct {
+		name string
+		p    *string
+	}{{"install_dir", &c.Paths.InstallDir}, {"state_dir", &c.Paths.StateDir}, {"data_dir", &c.Paths.DataDir}} {
+		if *f.p == "" {
+			add("paths.%s is required", f.name)
+			continue
+		}
+		*f.p = CleanPath(*f.p)
+		if !filepath.IsAbs(*f.p) {
+			add("paths.%s must be absolute: %q", f.name, *f.p)
 		}
 	}
 	if c.Web.HTTPPort < 1 || c.Web.HTTPPort > 65535 {
@@ -189,6 +195,33 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid config:\n  %s", strings.Join(errs, "\n  "))
 	}
 	return nil
+}
+
+// CleanPath returns p the way Win32 resolves it: surrounding whitespace
+// removed, trailing dots and spaces dropped from every name, and cleaned.
+// CreateFile strips those characters, so "D:\data." and "D:\data" are the
+// same directory; PHP compares path strings, so only the stripped spelling
+// works ("D:/data." fails Nextcloud's data directory checks). A bare drive
+// ("D:") means its root.
+func CleanPath(p string) string {
+	p = strings.TrimSpace(p)
+	vol := filepath.VolumeName(p)
+	rest := p[len(vol):]
+	rooted := strings.HasPrefix(rest, `\`) || strings.HasPrefix(rest, "/")
+	var names []string
+	for _, n := range strings.FieldsFunc(rest, func(r rune) bool { return r == '\\' || r == '/' }) {
+		if n != "." && n != ".." {
+			if n = strings.TrimRight(n, ". "); n == "" {
+				continue
+			}
+		}
+		names = append(names, n)
+	}
+	out := strings.Join(names, `\`)
+	if rooted || (len(vol) == 2 && vol[1] == ':') {
+		out = `\` + out
+	}
+	return filepath.Clean(vol + out)
 }
 
 // Derived paths. All forward-slashed so they can go straight into php.ini, the Caddyfile and config.php.

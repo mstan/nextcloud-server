@@ -16,6 +16,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -240,6 +241,7 @@ func runSetup(args []string) error {
 	passEnv := fs.String("admin-pass-env", "NCWIN_ADMIN_PASS", "environment variable holding the admin password")
 	noACL := fs.Bool("no-acl", false, "skip granting the service account access (developer installs)")
 	genPass := fs.Bool("generate-admin-pass", false, "generate the admin password into <state_dir>/initial-admin-password.txt")
+	ifNot := fs.Bool("if-not-installed", false, "do nothing if Nextcloud is already installed (installer upgrades)")
 	_ = fs.Parse(args)
 	pass := os.Getenv(*passEnv)
 	if pass == "" && !*genPass {
@@ -249,13 +251,32 @@ func runSetup(args []string) error {
 	if err != nil {
 		return err
 	}
-	o := setup.Options{AdminUser: *adminUser, AdminPass: pass, GenerateAdminPass: *genPass, Account: service.Account, Log: os.Stdout}
+	// The installer discards a custom action's output, so setup always keeps
+	// its own log, ending with the outcome.
+	logDir := filepath.FromSlash(c.LogDir())
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		return err
+	}
+	lf, err := os.OpenFile(filepath.Join(logDir, "setup.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	defer lf.Close()
+	fmt.Fprintf(lf, "==== ncwin %s setup %s\n", version, time.Now().Format(time.RFC3339))
+	o := setup.Options{AdminUser: *adminUser, AdminPass: pass, GenerateAdminPass: *genPass, Account: service.Account,
+		IfNotInstalled: *ifNot, Log: io.MultiWriter(os.Stdout, lf)}
 	if *noACL {
 		o.Account = ""
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	return setup.Run(ctx, c, o)
+	err = setup.Run(ctx, c, o)
+	if err != nil {
+		fmt.Fprintf(lf, "setup FAILED: %v\n", err)
+	} else {
+		fmt.Fprintln(lf, "setup OK")
+	}
+	return err
 }
 
 // ca manages the local certificate authority Caddy uses for tls = "internal" sites.
@@ -369,10 +390,11 @@ func runConfigure(args []string) error {
 		}
 		o.InstallDir = filepath.Dir(exe)
 	}
+	// MSI directory properties may end in '\', which would escape a closing
+	// quote on the command line, so the installer passes "[DIR]." instead.
+	// CleanPath drops that marker dot whether or not a separator precedes it.
 	for _, d := range []*string{&o.InstallDir, &o.StateDir, &o.DataDir} {
-		// MSI directory properties end in '\', which would escape a closing
-		// quote on the command line; the installer passes "[DIR]." instead.
-		*d = filepath.Clean(strings.TrimRight(*d, `\/`))
+		*d = config.CleanPath(*d)
 	}
 	o.Hostnames = strings.Split(*hosts, ",")
 	wrote, err := setup.Configure(*cfgPath, o)

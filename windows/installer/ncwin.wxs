@@ -77,11 +77,13 @@
       <RegistryValue Root="HKLM" Key="SYSTEM\CurrentControlSet\Control\FileSystem" Name="LongPathsEnabled" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
-    <!-- First install only: write ncwin.toml (kept if it exists) and provision
-         Nextcloud. Both run as SYSTEM after the service account exists (ACLs)
-         and before the service starts. Upgrades skip setup: the service runs
-         `occ upgrade` itself. Paths get a trailing "." so the MSI's trailing
-         backslash cannot escape the closing quote. -->
+    <!-- Write ncwin.toml (kept if it exists) and provision Nextcloud. Both run
+         as SYSTEM after the service account exists (ACLs) and before the
+         service starts. setup does nothing once Nextcloud is installed
+         (upgrades: the service runs `occ upgrade` itself), so an upgrade over
+         an install whose setup failed finishes it. Its output goes to
+         C:\ProgramData\ncwin\log\setup.log. Paths get a trailing "." so the
+         MSI's trailing backslash cannot escape the closing quote. -->
     <!-- Delayed auto-start, pre-shutdown time for a clean DB stop, restart-on-failure
          and the event-log source, via the SCM API (MSI's ServiceConfig table is unreliable). -->
     <CustomAction Id="NcwinServiceConfig" FileRef="NcwinExe" Execute="deferred" Impersonate="no" Return="check"
@@ -89,12 +91,12 @@
     <CustomAction Id="NcwinConfigure" FileRef="NcwinExe" Execute="deferred" Impersonate="no" Return="check"
                   ExeCommand="configure --config &quot;[CommonAppDataFolder]ncwin\ncwin.toml&quot; --install-dir &quot;[INSTALLFOLDER].&quot; --state-dir &quot;[CommonAppDataFolder]ncwin&quot; --data-dir &quot;[NCWIN_DATADIR].&quot; --db [NCWIN_DB] --http-port [NCWIN_HTTPPORT] --https-port [NCWIN_HTTPSPORT] --hostnames &quot;[NCWIN_HOSTNAMES]&quot; --public-domain &quot;[NCWIN_DOMAIN]&quot; --acme-email &quot;[NCWIN_ACMEEMAIL]&quot;" />
     <CustomAction Id="NcwinSetup" FileRef="NcwinExe" Execute="deferred" Impersonate="no" Return="check"
-                  ExeCommand="setup --config &quot;[CommonAppDataFolder]ncwin\ncwin.toml&quot; --generate-admin-pass" />
+                  ExeCommand="setup --config &quot;[CommonAppDataFolder]ncwin\ncwin.toml&quot; --generate-admin-pass --if-not-installed" />
 
     <InstallExecuteSequence>
       <Custom Action="NcwinServiceConfig" After="InstallServices" Condition="NOT REMOVE" />
       <Custom Action="NcwinConfigure" After="NcwinServiceConfig" Condition="NOT REMOVE" />
-      <Custom Action="NcwinSetup" After="NcwinConfigure" Condition="NOT REMOVE AND NOT WIX_UPGRADE_DETECTED" />
+      <Custom Action="NcwinSetup" After="NcwinConfigure" Condition="NOT REMOVE" />
     </InstallExecuteSequence>
 
     <UIRef Id="NcwinUI" />
