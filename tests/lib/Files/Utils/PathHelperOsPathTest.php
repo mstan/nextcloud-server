@@ -24,7 +24,7 @@ class PathHelperOsPathTest extends TestCase {
 			['C:\\data', $windows],
 			['d:\\', $windows],
 			['\\\\server\\share\\data', $windows],
-			['//server/share', $windows],
+			['//server/share', true], // starts with '/': absolute everywhere
 			['C:data', false],
 		];
 	}
