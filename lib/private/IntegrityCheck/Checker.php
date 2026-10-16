@@ -275,6 +275,32 @@ class Checker {
 	 * @throws InvalidSignatureException
 	 * @throws \Exception
 	 */
+	/**
+	 * A downstream build that patches core (e.g. the native Windows port)
+	 * re-signs it with its own root, shipped as downstream-root.crt. That root
+	 * is trusted only for an exact CN match: never for the "core is valid for
+	 * every scope" rule, so it cannot vouch for third-party apps. Without the
+	 * file (every upstream install) this returns null and nothing changes.
+	 */
+	private function loadDownstreamCertificate(string $certificate, string $certificateCN): ?X509 {
+		$path = $this->environmentHelper->getServerRoot() . '/resources/codesigning/downstream-root.crt';
+		if (!$this->fileAccessHelper->file_exists($path)) {
+			return null;
+		}
+		$roots = $this->fileAccessHelper->file_get_contents($path);
+		if (!\is_string($roots) || $roots === '') {
+			return null;
+		}
+		$x509 = new X509();
+		foreach ($this->splitCerts($roots) as $rootCert) {
+			$x509->loadCA($rootCert);
+		}
+		if ($x509->loadX509($certificate) === false || !$x509->validateSignature()) {
+			return null;
+		}
+		return $x509->getDN(X509::DN_OPENSSL)['CN'] === $certificateCN ? $x509 : null;
+	}
+
 	private function verify(string $signaturePath, string $basePath, string $certificateCN, bool $forceVerify = false): array {
 		if (!$forceVerify && !$this->isCodeCheckEnforced()) {
 			return [];
@@ -304,7 +330,10 @@ class Checker {
 			$x509->loadCA($rootCert);
 		}
 		if ($x509->loadX509($certificate) === false || !$x509->validateSignature()) {
-			throw new InvalidSignatureException('Certificate is not valid.');
+			$x509 = $this->loadDownstreamCertificate($certificate, $certificateCN);
+			if ($x509 === null) {
+				throw new InvalidSignatureException('Certificate is not valid.');
+			}
 		}
 		// Verify if certificate has proper CN. "core" CN is always trusted.
 		if ($x509->getDN(X509::DN_OPENSSL)['CN'] !== $certificateCN && $x509->getDN(X509::DN_OPENSSL)['CN'] !== 'core') {

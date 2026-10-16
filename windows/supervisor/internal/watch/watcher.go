@@ -135,7 +135,14 @@ func (w *Watcher) enqueueRescan(root string) {
 
 // Run watches until ctx is done.
 func (w *Watcher) Run(ctx context.Context) {
-	w.refreshRoots(ctx)
+	// Until the first root list arrives nothing is watched, so a failure
+	// (database or PHP not up yet) is retried quickly instead of waiting
+	// for the next RootsEvery tick.
+	var rootsRetry <-chan time.Time
+	rootsBackoff := 2 * time.Second
+	if !w.refreshRoots(ctx) {
+		rootsRetry = time.After(rootsBackoff)
+	}
 	rootsTick := time.NewTicker(w.opt.RootsEvery)
 	defer rootsTick.Stop()
 	noiseTick := time.NewTicker(time.Minute)
@@ -170,6 +177,12 @@ func (w *Watcher) Run(ctx context.Context) {
 			w.flush(ctx)
 		case <-rootsTick.C:
 			w.refreshRoots(ctx)
+		case <-rootsRetry:
+			rootsRetry = nil
+			if !w.refreshRoots(ctx) {
+				rootsBackoff = min(rootsBackoff*2, time.Minute)
+				rootsRetry = time.After(rootsBackoff)
+			}
 		case <-noiseTick.C:
 			w.flushNoise()
 		case <-nightly:
@@ -200,11 +213,11 @@ func (w *Watcher) nextNightly() <-chan time.Time {
 	return time.After(time.Until(next))
 }
 
-func (w *Watcher) refreshRoots(ctx context.Context) {
+func (w *Watcher) refreshRoots(ctx context.Context) bool {
 	roots, err := w.app.Roots(ctx)
 	if err != nil {
 		w.ring.Add("watch.error", "watch", "roots: "+err.Error(), nil)
-		return
+		return false
 	}
 	want := map[string]Root{}
 	for _, r := range roots {
@@ -231,6 +244,7 @@ func (w *Watcher) refreshRoots(ctx context.Context) {
 		// mount just added) is only found by a scan.
 		w.rescans[p] = struct{}{}
 	}
+	return true
 }
 
 func (w *Watcher) watchRoot(ctx context.Context, r Root) {

@@ -37,6 +37,8 @@ type Supervisor struct {
 	ring    *ring.Buffer
 	started time.Time
 
+	shutdown context.CancelFunc // ordered stop, same as an SCM stop request
+
 	mu       sync.Mutex
 	children []*proc.Child
 	cronLast map[string]string
@@ -53,6 +55,8 @@ func New(cfgPath string) (*Supervisor, error) {
 // Run blocks until ctx is cancelled. Children are started in dependency
 // order (database, then web) and stopped in reverse by context cancellation.
 func (s *Supervisor) Run(ctx context.Context) error {
+	ctx, s.shutdown = context.WithCancel(ctx)
+	defer s.shutdown()
 	s.started = time.Now()
 	s.ring.Add("svc.start", "ncwin", "", map[string]string{"config": s.cfgPath})
 	defer s.ring.Add("svc.stop", "ncwin", "", nil)
@@ -302,6 +306,11 @@ func (s *Supervisor) handle(ctx context.Context, op string, args json.RawMessage
 		s.mu.Unlock()
 		st.Ring[0], st.Ring[1] = s.ring.Bounds()
 		return st, nil
+	case "shutdown":
+		// Used by foreground runs and tooling; the SCM path stops the same way.
+		s.ring.Add("svc.shutdown", "ipc", "requested", nil)
+		go s.shutdown()
+		return "stopping", nil
 	case "events":
 		var q ring.Query
 		if len(args) > 0 {
