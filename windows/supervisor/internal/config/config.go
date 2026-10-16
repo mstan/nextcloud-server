@@ -20,6 +20,12 @@ type Config struct {
 	Cron     Cron     `toml:"cron"`
 	Watcher  Watcher  `toml:"watcher"`
 	Ring     Ring     `toml:"ring"`
+	Update   Update   `toml:"update"`
+}
+
+// Update says where `ncwin update` looks for releases.
+type Update struct {
+	Repo string `toml:"repo"` // GitHub owner/name publishing ncwin-*.zip releases
 }
 
 // Paths. InstallDir holds read-only program files (php/, nextcloud/, ncwin.exe);
@@ -104,6 +110,7 @@ func Default() Config {
 		Cron:     Cron{Interval: Duration{5 * time.Minute}},
 		Watcher:  Watcher{Enabled: true, Debounce: Duration{2 * time.Second}, NightlyScan: "03:30"},
 		Ring:     Ring{Capacity: 65536},
+		Update:   Update{Repo: "mstan/nextcloud-server"},
 	}
 }
 

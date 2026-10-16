@@ -13,6 +13,21 @@ This repository is `nextcloud/server` plus a small set of Windows commits on
 | `vNN.x.y-win.N` | released build of `win/NN` |
 | `win/canary` | Windows commits rebased weekly onto `upstream/master` |
 
+## One-time GitHub setup (fork)
+
+```sh
+gh repo edit mstan/nextcloud-server --default-branch win/35   # scheduled workflows run from the default branch
+# upstream's ~60 workflows would otherwise run on our pushes:
+gh workflow list -R mstan/nextcloud-server --all --json name,path \
+  --jq '.[] | select(.path | test("ncwin-") | not) | .path' |
+  xargs -n1 basename | xargs -I{} gh workflow disable {} -R mstan/nextcloud-server
+# signing keys (zip of core.key/.crt, windows_integration.key/.crt), base64:
+base64 -w0 signing.zip | gh secret set NCWIN_SIGNING_KEYS -R mstan/nextcloud-server
+```
+
+The signing root (`resources/codesigning/downstream-root.crt`) is public; its
+private key never leaves the maintainer's machine. Leaf keys are what CI holds.
+
 ## Point release (e.g. 35.0.2 → 35.0.3)
 
 ```sh
