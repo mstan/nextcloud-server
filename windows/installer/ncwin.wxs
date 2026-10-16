@@ -86,7 +86,7 @@
          MSI's trailing backslash cannot escape the closing quote. -->
     <!-- Delayed auto-start, pre-shutdown time for a clean DB stop, restart-on-failure
          and the event-log source, via the SCM API (MSI's ServiceConfig table is
-         unreliable); also the daily `ncwin update --auto` scheduled task. -->
+         unreliable); also the daily automatic-update scheduled task. -->
     <CustomAction Id="NcwinServiceConfig" FileRef="NcwinExe" Execute="deferred" Impersonate="no" Return="check"
                   ExeCommand="service-config --config &quot;[CommonAppDataFolder]ncwin\ncwin.toml&quot;" />
     <!-- Uninstall only (not the removal half of an upgrade): delete the daily update task. -->
