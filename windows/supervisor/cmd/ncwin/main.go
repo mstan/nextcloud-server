@@ -58,6 +58,8 @@ func main() {
 	switch cmd {
 	case "install":
 		err = service.Install(configFlag(cmd, args))
+	case "service-config":
+		err = service.Configure()
 	case "uninstall":
 		err = service.Uninstall()
 	case "start":
@@ -101,7 +103,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ncwin configure|setup|update|ca|shutdown|install|uninstall|start|stop|status|events|occ|grant-path|run|render|version [args]")
+	fmt.Fprintln(os.Stderr, "usage: ncwin configure|setup|service-config|update|ca|shutdown|install|uninstall|start|stop|status|events|occ|grant-path|run|render|version [args]")
 	os.Exit(2)
 }
 
@@ -368,7 +370,9 @@ func runConfigure(args []string) error {
 		o.InstallDir = filepath.Dir(exe)
 	}
 	for _, d := range []*string{&o.InstallDir, &o.StateDir, &o.DataDir} {
-		*d = strings.TrimRight(*d, `\/`) // MSI directory properties end in a backslash
+		// MSI directory properties end in '\', which would escape a closing
+		// quote on the command line; the installer passes "[DIR]." instead.
+		*d = filepath.Clean(strings.TrimRight(*d, `\/`))
 	}
 	o.Hostnames = strings.Split(*hosts, ",")
 	wrote, err := setup.Configure(*cfgPath, o)

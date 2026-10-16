@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -116,6 +117,34 @@ func Install(cfgPath string) error {
 		return err
 	}
 	defer s.Close()
+	return configure(s)
+}
+
+// Configure applies ncwin's service settings to an existing service (the MSI
+// creates the service itself, then runs `ncwin service-config`).
+func Configure() error {
+	m, err := mgr.Connect()
+	if err != nil {
+		return err
+	}
+	defer m.Disconnect()
+	s, err := m.OpenService(Name)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	c, err := s.Config()
+	if err != nil {
+		return err
+	}
+	c.DelayedAutoStart = true
+	if err := s.UpdateConfig(c); err != nil {
+		return err
+	}
+	return configure(s)
+}
+
+func configure(s *mgr.Service) error {
 	// Machine shutdown: ask for pre-shutdown notification with enough time for
 	// a clean database stop (default is 3 minutes).
 	if err := setPreshutdownTimeout(s, db.DBStopTimeout+time.Minute); err != nil {
@@ -128,7 +157,10 @@ func Install(cfgPath string) error {
 	}, uint32((24 * time.Hour).Seconds())); err != nil {
 		return err
 	}
-	_ = eventlog.InstallAsEventCreate(Name, eventlog.Error|eventlog.Warning|eventlog.Info)
+	if err := eventlog.InstallAsEventCreate(Name, eventlog.Error|eventlog.Warning|eventlog.Info); err != nil &&
+		!strings.Contains(err.Error(), "exists") {
+		return err
+	}
 	return nil
 }
 
