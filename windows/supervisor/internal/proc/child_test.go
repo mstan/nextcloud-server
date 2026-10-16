@@ -122,3 +122,19 @@ func TestRestartReportsReplacement(t *testing.T) {
 }
 
 type Query = ring.Query
+
+// A child launched with the restricted (non-admin) token still runs normally.
+func TestUnprivilegedChildRuns(t *testing.T) {
+	r := ring.New(1024)
+	sp := spec(t, 0, 10*time.Second)
+	sp.Unprivileged = true
+	c := NewChild(sp, r)
+	ctx, cancel := context.WithCancel(context.Background())
+	first := make(chan error, 1)
+	done := make(chan struct{})
+	go func() { c.Run(ctx, first); close(done) }()
+	defer func() { cancel(); <-done }()
+	if err := <-first; err != nil {
+		t.Fatalf("unprivileged start: %v; events %+v", err, r.Read(Query{}))
+	}
+}

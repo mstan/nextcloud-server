@@ -39,6 +39,9 @@ type Spec struct {
 	// hard kill after StopTimeout.
 	Stop        func(ctx context.Context) error
 	StopTimeout time.Duration
+
+	// Unprivileged runs the child with a restricted token (see RestrictedToken).
+	Unprivileged bool
 }
 
 const LogMax = 50 << 20
@@ -97,6 +100,16 @@ func (c *Child) start(ctx context.Context) error {
 	cmd.Env = append(os.Environ(), c.spec.Env...)
 	cmd.Stdout, cmd.Stderr = logf, logf
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x00000200 /* CREATE_NEW_PROCESS_GROUP */}
+	if c.spec.Unprivileged {
+		tok, err := RestrictedToken()
+		if err != nil {
+			logf.Close()
+			c.event("proc.error", err.Error(), nil)
+			return err
+		}
+		defer tok.Close() // CreateProcessAsUser has duplicated it by the time Start returns
+		cmd.SysProcAttr.Token = syscall.Token(tok)
+	}
 	if err := cmd.Start(); err != nil {
 		logf.Close()
 		c.event("proc.error", err.Error(), nil)
