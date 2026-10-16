@@ -80,7 +80,8 @@ Write-Host "extract nextcloud $($nc.version)"
 Expand-Zip $ncZip $stage   # zip contains a top-level nextcloud\ directory
 $tag = "v$($nc.version)"
 $patch = Join-Path $WorkDir "ncwin-$($nc.version).patch"
-& git -C $repo rev-parse --verify --quiet "$tag^{commit}" | Out-Null
+# No "^{commit}" peel syntax: MSYS2's git brace-expands its arguments.
+& git -C $repo rev-parse --verify --quiet "refs/tags/$tag" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "upstream tag $tag not found in $repo; run: git fetch upstream --tags" }
 # --output, not a pipe: PowerShell 5.1 re-encodes native-command pipeline text.
 & git -C $repo diff --binary --full-index "--output=$patch" $tag $PatchRef -- . ':(exclude)windows' ':(exclude).github'
@@ -122,6 +123,13 @@ foreach ($db in @(@{On = $WithMariaDB; Key = 'mariadb'}, @{On = $WithPostgres; K
     Expand-Zip (Get-Pinned $d.url $d.sha256) $tmp
     $top = Get-ChildItem $tmp -Directory | Select-Object -First 1
     Move-Item $top.FullName (Join-Path $stage $db.Key)
+    # Optional "strip" list: bundled extras ncwin never runs (pgAdmin, StackBuilder, docs).
+    if ($d.PSObject.Properties.Name -contains 'strip') {
+        foreach ($s in $d.strip) {
+            $p = Join-Path (Join-Path $stage $db.Key) $s
+            if (Test-Path $p) { Remove-Item -Recurse -Force $p }
+        }
+    }
     Remove-Item -Recurse -Force $tmp
 }
 

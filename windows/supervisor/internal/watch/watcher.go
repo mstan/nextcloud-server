@@ -57,7 +57,8 @@ type Applier interface {
 type ApplyResult struct {
 	Scanned int      `json:"scanned"`
 	Ignored int      `json:"ignored"`
-	Retry   []string `json:"retry"`
+	Retry   []string `json:"retry"`  // contention: re-apply later, unbounded
+	Failed  []string `json:"failed"` // errors: re-apply up to maxAttempts, then rescan the root
 	Errors  []string `json:"errors"`
 	Ms      int      `json:"ms"`
 }
@@ -78,6 +79,7 @@ type Watcher struct {
 
 	mu       sync.Mutex
 	noise    map[string]int // root -> ignored top-level events since the last summary
+	attempts map[string]int // path -> consecutive failed applies
 	pending  map[string]struct{}
 	rescans  map[string]struct{}
 	first    time.Time
@@ -99,7 +101,7 @@ func New(opt Options, r *ring.Buffer, app Applier) *Watcher {
 	if opt.RootsEvery == 0 {
 		opt.RootsEvery = 10 * time.Minute
 	}
-	return &Watcher{opt: opt, ring: r, app: app, noise: map[string]int{}, pending: map[string]struct{}{}, rescans: map[string]struct{}{},
+	return &Watcher{opt: opt, ring: r, app: app, noise: map[string]int{}, attempts: map[string]int{}, pending: map[string]struct{}{}, rescans: map[string]struct{}{},
 		wake: make(chan struct{}, 1), watching: map[string]context.CancelFunc{}}
 }
 
@@ -296,6 +298,10 @@ func (w *Watcher) runRescans(ctx context.Context) {
 		if len(res.Retry) > 0 {
 			w.retryLater(res.Retry)
 		}
+		if err != nil || len(res.Failed) > 0 {
+			// Retry the whole rescan later; it is the fallback of last resort.
+			time.AfterFunc(time.Minute, func() { w.enqueueRescan(root) })
+		}
 	}
 }
 
@@ -320,6 +326,52 @@ func (w *Watcher) flush(ctx context.Context) {
 		if len(res.Retry) > 0 {
 			w.retryLater(res.Retry)
 		}
+		w.handleFailed(batch, res.Failed)
+	}
+}
+
+// maxAttempts bounds re-applying a path that keeps failing; after that the
+// whole root is rescanned, so a change is never silently dropped.
+const maxAttempts = 3
+
+func (w *Watcher) handleFailed(batch, failed []string) {
+	w.mu.Lock()
+	failedSet := make(map[string]bool, len(failed))
+	for _, p := range failed {
+		failedSet[p] = true
+	}
+	for _, p := range batch {
+		if !failedSet[p] { // succeeded (or became a retry): reset its count
+			delete(w.attempts, p)
+		}
+	}
+	var again []string
+	escalate := map[string]bool{}
+	for _, p := range failed {
+		w.attempts[p]++
+		if w.attempts[p] < maxAttempts {
+			again = append(again, p)
+			continue
+		}
+		delete(w.attempts, p)
+		for root := range w.watching {
+			if p == root || strings.HasPrefix(strings.ToLower(p), strings.ToLower(root)+"/") {
+				escalate[root] = true
+			}
+		}
+	}
+	for root := range escalate {
+		w.rescans[root] = struct{}{}
+	}
+	w.mu.Unlock()
+	for root := range escalate {
+		w.ring.Add("watch.escalate", "watch", root, map[string]string{"reason": "apply failed " + strconv.Itoa(maxAttempts) + " times"})
+	}
+	if len(again) > 0 {
+		w.retryLater(again)
+	}
+	if len(escalate) > 0 {
+		w.poke()
 	}
 }
 
@@ -330,7 +382,7 @@ func (w *Watcher) retryLater(paths []string) {
 func (w *Watcher) record(kind, msg string, res ApplyResult, err error) {
 	f := map[string]string{
 		"scanned": strconv.Itoa(res.Scanned), "ignored": strconv.Itoa(res.Ignored),
-		"retry": strconv.Itoa(len(res.Retry)), "errors": strconv.Itoa(len(res.Errors)), "ms": strconv.Itoa(res.Ms),
+		"retry": strconv.Itoa(len(res.Retry)), "failed": strconv.Itoa(len(res.Failed)), "errors": strconv.Itoa(len(res.Errors)), "ms": strconv.Itoa(res.Ms),
 	}
 	if err != nil {
 		f["error"] = err.Error()
