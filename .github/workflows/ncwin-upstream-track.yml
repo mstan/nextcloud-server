@@ -86,6 +86,10 @@ jobs:
         with:
           name: ncwin
           path: ncwin
+      - uses: actions/download-artifact@v4
+        with:
+          name: ncwin-msi
+          path: msi
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -95,6 +99,8 @@ jobs:
           tag="$NEW-win.1"
           (cd ncwin && zip -qr "../ncwin-${tag#v}.zip" .)
           sha256sum "ncwin-${tag#v}.zip" > "ncwin-${tag#v}.zip.sha256"
-          gh release create "$tag" "ncwin-${tag#v}.zip" "ncwin-${tag#v}.zip.sha256" \
+          mv msi/ncwin.msi "ncwin-${tag#v}.msi"
+          sha256sum "ncwin-${tag#v}.msi" > "ncwin-${tag#v}.msi.sha256"
+          gh release create "$tag" "ncwin-${tag#v}.zip" "ncwin-${tag#v}.zip.sha256" "ncwin-${tag#v}.msi" "ncwin-${tag#v}.msi.sha256" \
             --repo "$GITHUB_REPOSITORY" --target "$BRANCH" \
             --title "ncwin ${tag#v}" --notes "Nextcloud ${NEW#v} for Windows (automatic build from $BRANCH)."

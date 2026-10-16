@@ -1,0 +1,8 @@
+# Tests that also fail on stock upstream (Linux, v35.0.2), verified with
+# windows/tests/linux-compare.sh. Never list a Windows-only failure here.
+# BearerAuthAwareSabreClient is declared as a second class inside
+# lib/private/Files/Storage/DAV.php, so it does not autoload on its own.
+Test\Files\Storage\BearerAuthAwareSabreClientTest::testBearerTokenIsUsedForAuthentication
+Test\Files\Storage\BearerAuthAwareSabreClientTest::testShareSecretIsNotUsedAsBearer
+Test\Files\Storage\BearerAuthAwareSabreClientTest::testNoBearerAppliedWithoutBearerAuthType
+Test\Files\Storage\BearerAuthAwareSabreClientTest::testNoBearerAppliedWithoutBearerToken
