@@ -212,7 +212,7 @@ func (c Config) DataDir() string       { return slash(c.Paths.DataDir) }
 
 // EnsureStateDirs creates every directory ncwin writes to.
 func (c Config) EnsureStateDirs() error {
-	for _, d := range []string{c.GeneratedDir(), c.NCConfigDir(), c.CustomAppsDir(), c.LogDir(), c.TempDir(), c.CaddyDataDir(), c.DataDir()} {
+	for _, d := range []string{c.GeneratedDir(), c.NCConfigDir(), c.CustomAppsDir(), c.LogDir(), c.TempDir(), c.TempDir() + "/opcache", c.CaddyDataDir(), c.DataDir()} {
 		if err := os.MkdirAll(filepath.FromSlash(d), 0o755); err != nil {
 			return err
 		}

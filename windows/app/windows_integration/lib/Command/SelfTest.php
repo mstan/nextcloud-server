@@ -81,16 +81,22 @@ class SelfTest extends Base {
 			unlink("$dir/Case.txt");
 			return $r ?: 'volume is case-sensitive; localstorage.case_insensitive should be disabled for it';
 		});
-		$check('rename onto a file open for reading', function () use ($dir) {
-			file_put_contents("$dir/target", 'old');
-			file_put_contents("$dir/source", 'new');
+		$check('overwrite a file another process is reading (Local storage)', function () use ($dir) {
+			// Nextcloud's upload path: rename the finished .part onto the existing file.
+			$storage = new \OC\Files\Storage\Local(['datadir' => $dir]);
+			$storage->file_put_contents('target', 'old');
+			$storage->file_put_contents('source.part', 'new');
 			$h = fopen("$dir/target", 'rb');
-			$ok = @rename("$dir/source", "$dir/target");
+			$ok = $storage->rename('source.part', 'target');
+			$seen = fread($h, 10);
 			fclose($h);
 			$content = @file_get_contents("$dir/target");
-			@unlink("$dir/source");
+			@unlink("$dir/source.part");
 			@unlink("$dir/target");
-			return ($ok && $content === 'new') ?: 'rename failed while target was open (sharing violation); retry logic required';
+			if (!$ok || $content !== 'new') {
+				return 'overwrite failed while the target was open; content now ' . var_export($content, true);
+			}
+			return $seen === 'old' ?: 'the open reader saw ' . var_export($seen, true);
 		});
 		$check('unlink a file open for reading', function () use ($dir) {
 			file_put_contents("$dir/open", 'x');

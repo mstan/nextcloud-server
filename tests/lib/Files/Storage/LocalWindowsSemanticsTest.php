@@ -17,12 +17,13 @@ use OCP\Server;
 use Test\TestCase;
 
 /**
- * Creating an item whose name differs only in letter case from an existing
- * sibling must fail on a case-insensitive volume instead of silently
- * overwriting it. Skipped where the temp volume is case-sensitive.
+ * Local storage on Windows/NTFS semantics: case-insensitive names (a case
+ * variant must be refused, not silently merged), '\' as an OS separator, and
+ * overwriting files other processes hold open. Skipped where the temp volume
+ * is case-sensitive.
  */
 #[\PHPUnit\Framework\Attributes\Group('DB')]
-class LocalCaseInsensitiveTest extends TestCase {
+class LocalWindowsSemanticsTest extends TestCase {
 	private string $tmpDir;
 	private Local $storage;
 
@@ -92,6 +93,25 @@ class LocalCaseInsensitiveTest extends TestCase {
 		} finally {
 			$this->assertFileDoesNotExist($this->tmpDir . '/a/b.txt');
 		}
+	}
+
+	/**
+	 * Overwriting a file that another process is reading must neither lose the
+	 * old content nor fail: on Windows a deleted-but-open file blocks its name.
+	 */
+	public function testOverwriteWhileTargetIsOpen(): void {
+		$this->storage->file_put_contents('target.txt', 'old');
+		$this->storage->file_put_contents('upload.part', 'new');
+		$reader = fopen($this->tmpDir . '/target.txt', 'rb');
+		try {
+			$this->assertTrue($this->storage->rename('upload.part', 'target.txt'));
+			$this->assertSame('new', $this->storage->file_get_contents('target.txt'));
+			$this->assertSame('old', fread($reader, 10), 'the open reader keeps seeing the old content');
+		} finally {
+			fclose($reader);
+		}
+		$leftovers = array_filter(scandir($this->tmpDir), fn ($f) => str_starts_with($f, '.ncwin-replaced-'));
+		$this->assertSame([], array_values($leftovers), 'the replaced file is removed once its reader closes');
 	}
 
 	public function testExactNameStillWritable(): void {
