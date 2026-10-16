@@ -89,14 +89,13 @@ $patch = Join-Path $WorkDir "ncwin-$($nc.version).patch"
 & git -C $repo rev-parse --verify --quiet "refs/tags/$tag" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "upstream tag $tag not found in $repo; run: git fetch upstream --tags" }
 # --output, not a pipe: PowerShell 5.1 re-encodes native-command pipeline text.
-& git -C $repo diff --binary --full-index "--output=$patch" $tag $PatchRef -- . ':(exclude)windows' ':(exclude).github'
+# Release zips contain no tests or build tooling; never ship those parts of the patch set.
+& git -C $repo diff --binary --full-index "--output=$patch" $tag $PatchRef -- . ':(exclude)windows' ':(exclude).github' ':(exclude)tests' ':(exclude)build' ':(exclude,glob)apps/*/tests/**'
 if ($LASTEXITCODE -ne 0) { throw 'git diff failed' }
 $patchSize = (Get-Item $patch).Length
 if ($patchSize -gt 0) {
     Write-Host "apply fork patch ($patchSize bytes, $tag..$PatchRef)"
-    # Release zips omit some upstream paths (tests, build tooling); patches
-    # touching only those are skipped rather than failing the build.
-    & git -C (Join-Path $stage 'nextcloud') apply --whitespace=nowarn --exclude='tests/*' --exclude='build/*' $patch
+    & git -C (Join-Path $stage 'nextcloud') apply --whitespace=nowarn $patch
     if ($LASTEXITCODE -ne 0) { throw "fork patch does not apply cleanly to the $($nc.version) release zip" }
 } else {
     Write-Host "no fork patches between $tag and $PatchRef"
