@@ -89,7 +89,8 @@ class Checker {
 		if ($root === '') {
 			$root = \OC::$SERVERROOT;
 		}
-		$root = rtrim($root, '/');
+		// Exclusions are matched against '/'-normalised paths (see ExcludeFoldersByPathFilterIterator).
+		$root = rtrim(PathHelper::normalizeOsPath($root), '/');
 
 		$excludeGenericFilesIterator = new ExcludeFileByNameFilterIterator($dirItr);
 		$excludeFoldersIterator = new ExcludeFoldersByPathFilterIterator($excludeGenericFilesIterator, $root);

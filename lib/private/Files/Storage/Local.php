@@ -392,6 +392,37 @@ class Local extends Common {
 		return false;
 	}
 
+	/**
+	 * Overwrite $target with $source on Windows without a window in which the
+	 * data can be lost.
+	 *
+	 * Deleting a file that another process has open (a sync client downloading
+	 * it, the search indexer, antivirus) hides its name, but NTFS refuses to
+	 * reuse that name ("Access is denied") until the reader closes it. The
+	 * generic delete-then-rename would therefore lose the old version and fail
+	 * to place the new one. Renaming an open file does work (PHP opens with
+	 * FILE_SHARE_DELETE), so: move the old file aside, move the new one in,
+	 * delete the old one (completed by Windows once its readers close), and
+	 * put the old one back if the move-in fails.
+	 */
+	private function replaceFileWindows(string $source, string $target): bool {
+		$absoluteSource = $this->getSourcePath($source);
+		$absoluteTarget = $this->getSourcePath($target);
+		// ".part": ignored by the scanner and by ncwin's watcher.
+		$aside = PathHelper::dirname($absoluteTarget) . '/.ncwin-replaced-' . bin2hex(random_bytes(6)) . '.part';
+		if (!$this->retryOnSharingViolation(fn () => @rename($absoluteTarget, $aside), $absoluteTarget)) {
+			Server::get(LoggerInterface::class)->error('unable to move ' . $absoluteTarget . ' aside to overwrite it', ['app' => 'core', 'last_error' => error_get_last()]);
+			return false;
+		}
+		if (!$this->retryOnSharingViolation(fn () => @rename($absoluteSource, $absoluteTarget), $absoluteSource)) {
+			Server::get(LoggerInterface::class)->error('failed to rename ' . $absoluteSource . ' to ' . $absoluteTarget . '; restoring the previous file', ['app' => 'core', 'last_error' => error_get_last()]);
+			@rename($aside, $absoluteTarget);
+			return false;
+		}
+		@unlink($aside);
+		return true;
+	}
+
 	private function checkTreeForForbiddenItems(string $path): void {
 		$iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($path));
 		foreach ($iterator as $file) {
@@ -427,6 +458,11 @@ class Local extends Common {
 		// A case-only rename (a.txt -> A.txt) is fine; anything else must not land on a case variant.
 		if (mb_strtolower($target) !== mb_strtolower($source)) {
 			$this->assertNoCaseConflict($target);
+		}
+
+		if (DIRECTORY_SEPARATOR === '\\' && $this->is_file($source) && $this->is_file($target)
+			&& mb_strtolower($target) !== mb_strtolower($source)) {
+			return $this->replaceFileWindows($source, $target);
 		}
 
 		if ($this->file_exists($target)) {
