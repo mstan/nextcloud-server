@@ -52,3 +52,8 @@ nightly_scan = "03:30"   # full reconciliation scan; "" disables
 
 [ring]
 capacity = 65536         # events kept in memory for `ncwin events`
+
+[update]
+#repo = "mstan/nextcloud-server"  # GitHub releases `ncwin update` installs from
+auto = true              # a daily task (04:30, catches up after sleep) installs new releases
+majors = false           # let it move to a new Nextcloud major as well (otherwise: run `ncwin update`)

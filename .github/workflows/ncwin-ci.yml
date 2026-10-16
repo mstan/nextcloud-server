@@ -10,6 +10,15 @@ on:
     branches: ['master', 'win/**']
   workflow_dispatch:
   workflow_call:
+    inputs:
+      ref:
+        description: Branch or commit to build (the caller's own commit otherwise).
+        type: string
+        default: ''
+      version:
+        description: Release tag stamped into ncwin.exe, e.g. v35.0.3-win.1.
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -21,6 +30,8 @@ jobs:
       - name: Check out byte-for-byte (no CRLF conversion)
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: windows/supervisor/go.mod
@@ -38,6 +49,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       - run: python3 windows/build/lint_windows.py
 
   php-lint:
@@ -48,6 +61,7 @@ jobs:
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
       - name: Fetch upstream tags
         # Only the base tag: upstream has tags differing only in case, which
@@ -82,6 +96,7 @@ jobs:
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref }}
           submodules: true
       - name: PHP runtime + PHPUnit
         shell: pwsh
@@ -130,6 +145,7 @@ jobs:
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
@@ -159,6 +175,7 @@ jobs:
         run: |
           $a = @{ WorkDir = (Join-Path $env:RUNNER_TEMP 'build'); WithMariaDB = $true; WithPostgres = $true }
           if ($env:NCWIN_SIGNING_DIR) { $a.SigningDir = $env:NCWIN_SIGNING_DIR } else { $a.NoSign = $true }
+          if ('${{ inputs.version }}') { $a.Version = '${{ inputs.version }}' }
           ./windows/build/assemble.ps1 @a
       - name: Smoke test (SQLite, foreground)
         shell: pwsh

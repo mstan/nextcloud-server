@@ -190,7 +190,10 @@ func Start() error {
 		return err
 	}
 	defer s.Close()
-	return s.Start()
+	if err := s.Start(); err != nil && err != windows.ERROR_SERVICE_ALREADY_RUNNING {
+		return err
+	}
+	return nil
 }
 
 func Stop() error {
@@ -205,10 +208,18 @@ func Stop() error {
 	}
 	defer s.Close()
 	st, err := s.Control(svc.Stop)
-	if err != nil {
+	switch {
+	case err == windows.ERROR_SERVICE_NOT_ACTIVE:
+		return nil
+	case err == windows.ERROR_SERVICE_CANNOT_ACCEPT_CTRL: // already stopping
+		if st, err = s.Query(); err != nil {
+			return err
+		}
+	case err != nil:
 		return err
 	}
-	for deadline := time.Now().Add(4 * time.Minute); st.State != svc.Stopped; {
+	// The service stops its database cleanly, which may wait for a checkpoint.
+	for deadline := time.Now().Add(db.DBStopTimeout + 2*time.Minute); st.State != svc.Stopped; {
 		if time.Now().After(deadline) {
 			return fmt.Errorf("timed out waiting for %s to stop", Name)
 		}

@@ -22,17 +22,31 @@ names and an optional public domain, then installs the `ncwin` service, runs
 change it after the first login. Unattended:
 
 ```
-msiexec /i ncwin-35.0.2-win.1.msi /qn NCWIN_DATADIR=D:\NextcloudData\ NCWIN_DB=pgsql ^
+msiexec /i ncwin-35.0.2-win.2.msi /qn NCWIN_DATADIR=D:\NextcloudData\ NCWIN_DB=pgsql ^
         NCWIN_HTTPSPORT=443 NCWIN_HOSTNAMES=nas,192.168.1.20 NCWIN_DOMAIN=cloud.example.com NCWIN_ACMEEMAIL=me@example.com
 ```
 
 LAN sites use ncwin's own CA: `ncwin ca export ncwin-root.crt` and trust it
 on client devices (`ncwin ca trust` on the server itself).
 
-Upgrades: install a newer MSI (stops the service cleanly, swaps code, starts
-it; ncwin runs `occ upgrade` before serving), or `ncwin update` (snapshot,
-swap, health check, automatic rollback). Uninstall keeps
+Upgrades are automatic: a daily scheduled task (`ncwin\update`, 04:30, run
+late if the machine was off) installs new releases of the running Nextcloud
+major. It snapshots the database, upgrades through the release's MSI (or
+swaps the code of a zip install), waits for Nextcloud to report healthy, and
+otherwise restores the snapshot and the previous release. New majors wait
+for `ncwin update` (or `[update] majors = true`); `[update] auto = false`
+turns it off. `ncwin update --check` shows what it would do; outcomes are in
+`log\update.log` and the Application event log. Installing a newer MSI by
+hand works too. Uninstall keeps
 `C:\ProgramData\ncwin` and the data directory.
+
+If provisioning fails, the installer rolls back and the reason is at the end
+of `C:\ProgramData\ncwin\log\setup.log`. Fix it (`ncwin.toml` in
+`C:\ProgramData\ncwin` is kept and reused), then run the MSI again, or run
+`ncwin setup --generate-admin-pass` elevated. Setup can be repeated: it
+reuses the generated passwords, empties a bundled database left by an
+unfinished install, and moves that install's leftovers in the data directory
+into `(unfinished install <date>)`.
 
 ## Runtime layout
 

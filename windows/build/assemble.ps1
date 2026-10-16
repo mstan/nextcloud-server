@@ -21,7 +21,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$WorkDir = (Join-Path (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))) 'nextcloud-build'),
+    # Default: nextcloud-build next to the repository.
+    [string]$WorkDir,
     [string]$Out,
     [string]$PatchRef = 'HEAD',
     [switch]$WithMariaDB,
@@ -31,12 +32,17 @@ param(
     # resources/codesigning/downstream-root.crt. CI passes these from secrets.
     [string]$SigningDir,
     # Developer builds only: keep upstream's signature (the integrity check will flag patched files).
-    [switch]$NoSign
+    [switch]$NoSign,
+    # Release tag stamped into ncwin.exe (vX.Y.Z-win.N); default: git describe.
+    # Automatic updates compare it with the latest release, so releases need it.
+    [string]$Version
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+# (Computed here: Windows PowerShell 5.1 leaves $PSScriptRoot empty in param() defaults.)
+if (-not $WorkDir) { $WorkDir = Join-Path (Split-Path -Parent $repo) 'nextcloud-build' }
 $lock = Get-Content -Raw (Join-Path $PSScriptRoot 'deps.lock.json') | ConvertFrom-Json
 $cache = Join-Path $WorkDir 'cache'
 if (-not $Out) { $Out = Join-Path $WorkDir 'out\ncwin' }
@@ -178,7 +184,7 @@ foreach ($db in @(@{On = $WithMariaDB; Key = 'mariadb'}, @{On = $WithPostgres; K
 Write-Host 'build ncwin.exe'
 Push-Location (Join-Path $repo 'windows\supervisor')
 try {
-    $ver = (& git -C $repo describe --tags --always $PatchRef)
+    $ver = if ($Version) { $Version } else { (& git -C $repo describe --tags --always $PatchRef) }
     & go build -trimpath -ldflags "-s -w -X main.version=$ver" -o (Join-Path $stage 'ncwin.exe') ./cmd/ncwin
     if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
 } finally { Pop-Location }

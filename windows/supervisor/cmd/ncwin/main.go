@@ -25,7 +25,9 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
+	"golang.org/x/sys/windows/svc/eventlog"
 
 	"github.com/mstan/nextcloud-server/windows/supervisor/internal/config"
 	"github.com/mstan/nextcloud-server/windows/supervisor/internal/ipc"
@@ -60,7 +62,9 @@ func main() {
 	case "install":
 		err = service.Install(configFlag(cmd, args))
 	case "service-config":
-		err = service.Configure()
+		err = serviceConfig(args)
+	case "service-unconfig":
+		err = service.RemoveUpdateTask()
 	case "uninstall":
 		err = service.Uninstall()
 	case "start":
@@ -318,21 +322,33 @@ func (scmService) Stop() error  { return service.Stop() }
 func (scmService) Start() error { return service.Start() }
 
 // runUpdate installs a newer release (see internal/update). install_dir is
-// renamed during the update, which Windows refuses while this executable runs
-// from it, so the command first re-launches a copy of itself from state_dir.
+// replaced during the update, which Windows refuses while this executable
+// runs from it, so the command first re-launches a copy of itself from
+// state_dir. --auto is what the daily scheduled task runs.
 func runUpdate(args []string) error {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 	cfgPath := fs.String("config", defaultConfig, "path to ncwin.toml")
-	from := fs.String("from", "", "release zip path or https URL (default: latest GitHub release)")
+	from := fs.String("from", "", "release .zip or .msi path or https URL (default: latest GitHub release)")
 	sum := fs.String("sha256", "", "SHA-256 of --from")
 	extOK := fs.Bool("external-db-backed-up", false, "confirm an external database has been backed up")
+	auto := fs.Bool("auto", false, "install the latest release only if it is newer (same Nextcloud major unless [update] majors)")
+	check := fs.Bool("check", false, "report what an update would install, and change nothing")
 	relocated := fs.Bool("relocated", false, "internal: running from the relocated copy")
 	_ = fs.Parse(args)
 	c, err := config.Load(*cfgPath)
 	if err != nil {
 		return err
 	}
-	if !*relocated {
+	if *auto && !c.Update.Auto && !*check {
+		fmt.Println("automatic updates are off ([update] auto = false)")
+		return nil
+	}
+	if !*relocated && !*check {
+		unlock, err := updateLock()
+		if err != nil {
+			return err
+		}
+		defer unlock()
 		self, err := os.Executable()
 		if err != nil {
 			return err
@@ -360,11 +376,76 @@ func runUpdate(args []string) error {
 		}
 		return nil
 	}
+
+	log := io.Writer(os.Stdout)
+	if !*check {
+		logDir := filepath.FromSlash(c.LogDir())
+		if err := os.MkdirAll(logDir, 0o755); err != nil {
+			return err
+		}
+		lf, err := os.OpenFile(filepath.Join(logDir, "update.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if err != nil {
+			return err
+		}
+		defer lf.Close()
+		fmt.Fprintf(lf, "==== ncwin %s update %s\n", version, time.Now().Format(time.RFC3339))
+		log = io.MultiWriter(os.Stdout, lf)
+	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	return update.Run(ctx, c, scmService{}, update.Options{
-		Source: *from, SHA256: *sum, Repo: c.Update.Repo, ExternalDBBackedUp: *extOK, Log: os.Stdout,
+	var out strings.Builder
+	err = update.Run(ctx, c, scmService{}, update.Options{
+		Source: *from, SHA256: *sum, Repo: c.Update.Repo, Current: version,
+		Auto: *auto, AllowMajor: c.Update.Majors, DryRun: *check,
+		ExternalDBBackedUp: *extOK, Packages: update.WindowsInstaller{},
+		Log: io.MultiWriter(log, &out),
 	})
+	if !*check {
+		fmt.Fprintf(log, "update %s\n", map[bool]string{true: "OK", false: "FAILED: " + fmt.Sprint(err)}[err == nil])
+		reportUpdate(out.String(), err)
+	}
+	return err
+}
+
+// updateLock makes sure only one update runs on this machine at a time.
+func updateLock() (func(), error) {
+	name, _ := windows.UTF16PtrFromString(`Global\ncwin-update`)
+	h, err := windows.CreateMutex(nil, false, name)
+	if err != nil {
+		return nil, fmt.Errorf("update lock: %w", err)
+	}
+	ev, err := windows.WaitForSingleObject(h, 0)
+	if err != nil || (ev != windows.WAIT_OBJECT_0 && ev != windows.WAIT_ABANDONED) {
+		windows.CloseHandle(h)
+		return nil, errors.New("another ncwin update is already running")
+	}
+	return func() { windows.ReleaseMutex(h); windows.CloseHandle(h) }, nil
+}
+
+// reportUpdate records an update's outcome in the Windows event log (an
+// update that found nothing to install is not worth an entry).
+func reportUpdate(log string, err error) {
+	el, oerr := eventlog.Open(service.Name)
+	if oerr != nil {
+		return
+	}
+	defer el.Close()
+	switch {
+	case err != nil:
+		el.Error(3, "ncwin update failed: "+err.Error()+"\n\n"+log)
+	case strings.Contains(log, "update complete"):
+		el.Info(3, "ncwin update installed a new release.\n\n"+log)
+	}
+}
+
+// serviceConfig applies the service settings the MSI cannot express, and
+// schedules the daily update check.
+func serviceConfig(args []string) error {
+	cfgPath := configFlag("service-config", args)
+	if err := service.Configure(); err != nil {
+		return err
+	}
+	return service.InstallUpdateTask(cfgPath)
 }
 
 // runConfigure writes ncwin.toml from installer answers (no secrets; database

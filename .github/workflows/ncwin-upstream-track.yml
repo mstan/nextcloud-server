@@ -99,6 +99,10 @@ jobs:
     if: needs.track.outputs.new_tag != ''
     uses: ./.github/workflows/ncwin-ci.yml
     secrets: inherit
+    with:
+      # The run was triggered on the old commit; build the rebased branch.
+      ref: ${{ needs.track.outputs.branch }}
+      version: ${{ needs.track.outputs.new_tag }}-win.1
 
   release:
     needs: [track, ci]

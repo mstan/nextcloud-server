@@ -19,6 +19,10 @@ import (
 
 const PipeName = `\\.\pipe\ncwin`
 
+// pipeName is the pipe actually used; tests point it elsewhere so they never
+// meet a running service.
+var pipeName = PipeName
+
 // SYSTEM and BUILTIN\Administrators get full access; nobody else.
 const sddl = "D:P(A;;GA;;;SY)(A;;GA;;;BA)"
 
@@ -68,9 +72,9 @@ func (s Server) Serve(ctx context.Context) error {
 	if s.AllowSID != "" && s.AllowSID != self {
 		sd += "(A;;GA;;;" + s.AllowSID + ")"
 	}
-	l, err := winio.ListenPipe(PipeName, &winio.PipeConfig{SecurityDescriptor: sd, InputBufferSize: 64 << 10, OutputBufferSize: 64 << 10})
+	l, err := winio.ListenPipe(pipeName, &winio.PipeConfig{SecurityDescriptor: sd, InputBufferSize: 64 << 10, OutputBufferSize: 64 << 10})
 	if err != nil {
-		return fmt.Errorf("listen %s: %w", PipeName, err)
+		return fmt.Errorf("listen %s: %w", pipeName, err)
 	}
 	go func() { <-ctx.Done(); l.Close() }()
 	for {
@@ -133,7 +137,7 @@ func (s Server) handle(ctx context.Context, conn net.Conn) {
 
 func dial() (net.Conn, error) {
 	timeout := 3 * time.Second
-	conn, err := winio.DialPipe(PipeName, &timeout)
+	conn, err := winio.DialPipe(pipeName, &timeout)
 	if err != nil {
 		return nil, fmt.Errorf("ncwin service not reachable (%w); is it running, and is this an elevated prompt?", err)
 	}
