@@ -122,7 +122,7 @@ class JSConfigHelper {
 		}
 
 		$countOfDataLocation = 0;
-		$dataLocation = str_replace(\OC::$SERVERROOT . '/', '', $this->config->getSystemValue('datadirectory', ''), $countOfDataLocation);
+		$dataLocation = str_replace(\OC::$SERVERROOT . '/', '', \OC\Files\Utils\PathHelper::normalizeOsPath((string)$this->config->getSystemValue('datadirectory', '')), $countOfDataLocation);
 		if ($countOfDataLocation !== 1 || $uid === null || !$this->groupManager->isAdmin($uid)) {
 			$dataLocation = false;
 		}

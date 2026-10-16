@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 namespace OC\Template;
 
+use OC\Files\Utils\PathHelper;
 use OCP\IConfig;
 use Psr\Log\LoggerInterface;
 
@@ -108,15 +109,18 @@ abstract class ResourceLocator {
 				break;
 			}
 
-			if ($tmpRoot === '/') {
+			// The parent of a Windows drive root ('C:/') is itself, never '/'.
+			$parent = PathHelper::normalizeOsPath(dirname($tmpRoot));
+			if ($tmpRoot === '/' || $parent === $tmpRoot) {
 				break;
 			}
 
-			$tmpRoot = dirname($tmpRoot);
+			$tmpRoot = $parent;
 		}
 
 		if ($webRoot === null) {
 			$realpath = realpath($root);
+			$realpath = $realpath === false ? false : PathHelper::normalizeOsPath($realpath);
 
 			if ($realpath && ($realpath !== $root)) {
 				return $this->findWebRoot($realpath);

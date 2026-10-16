@@ -48,7 +48,7 @@ class PreviewCommand extends Command {
 		$version = $input->getArgument('version');
 		if (filter_var($version, FILTER_VALIDATE_URL)) {
 			$metadata = $this->releaseMetadata->downloadMetadata($version);
-		} elseif (str_starts_with($version, '/')) {
+		} elseif (\OC\Files\Utils\PathHelper::isAbsoluteOsPath($version)) {
 			$metadata = json_decode(file_get_contents($version), true, flags: JSON_THROW_ON_ERROR);
 		} else {
 			$metadata = $this->releaseMetadata->getMetadata($version);

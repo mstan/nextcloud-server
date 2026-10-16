@@ -42,6 +42,7 @@ class JSResourceLocator extends ResourceLocator {
 			if ($appRoot) {
 				// Handle symlinks
 				$appRoot = realpath($appRoot);
+				$appRoot = $appRoot === false ? false : \OC\Files\Utils\PathHelper::normalizeOsPath($appRoot);
 			}
 			// Get the app webroot
 			$appWebRoot = dirname($this->appManager->getAppWebPath($app));
