@@ -190,10 +190,10 @@ class Trashbin implements IEventListener {
 	private static function copyFilesToUser($sourcePath, $owner, $targetPath, $user, $timestamp): void {
 		self::setUpTrash($owner);
 
-		$targetFilename = basename($targetPath);
+		$targetFilename = \OC\Files\Utils\PathHelper::basename($targetPath);
 		$targetLocation = \OC\Files\Utils\PathHelper::dirname($targetPath);
 
-		$sourceFilename = basename($sourcePath);
+		$sourceFilename = \OC\Files\Utils\PathHelper::basename($sourcePath);
 
 		$view = new View('/');
 
@@ -458,7 +458,7 @@ class Trashbin implements IEventListener {
 
 			if ($rootView->is_dir($owner . '/files_versions/' . $ownerPath)) {
 				if ($owner !== $user) {
-					self::copy_recursive($owner . '/files_versions/' . $ownerPath, $owner . '/files_trashbin/versions/' . static::getTrashFilename(basename($ownerPath), $timestamp), $rootView);
+					self::copy_recursive($owner . '/files_versions/' . $ownerPath, $owner . '/files_trashbin/versions/' . static::getTrashFilename(\OC\Files\Utils\PathHelper::basename($ownerPath), $timestamp), $rootView);
 				}
 				self::move($rootView, $owner . '/files_versions/' . $ownerPath, $user . '/files_trashbin/versions/' . static::getTrashFilename($filename, $timestamp));
 			} elseif ($versions = Storage::getVersions($owner, $ownerPath)) {
@@ -1083,7 +1083,7 @@ class Trashbin implements IEventListener {
 		/** @var \OC\Files\Storage\Storage $storage */
 		[$storage,] = $view->resolvePath('/');
 
-		$pattern = Server::get(IDBConnection::class)->escapeLikeParameter(basename($filename));
+		$pattern = Server::get(IDBConnection::class)->escapeLikeParameter(\OC\Files\Utils\PathHelper::basename($filename));
 		if ($timestamp) {
 			// fetch for old versions
 			$escapedTimestamp = Server::get(IDBConnection::class)->escapeLikeParameter((string)$timestamp);

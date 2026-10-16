@@ -139,7 +139,7 @@ class Swift extends Common {
 
 		$bucketUrl = new Uri($parameters['bucket']);
 		if ($bucketUrl->getHost()) {
-			$parameters['bucket'] = basename($bucketUrl->getPath());
+			$parameters['bucket'] = \OC\Files\Utils\PathHelper::basename($bucketUrl->getPath());
 			$parameters['endpoint_url'] = (string)$bucketUrl->withPath(\OC\Files\Utils\PathHelper::dirname($bucketUrl->getPath()));
 		}
 
@@ -275,8 +275,8 @@ class Swift extends Common {
 
 			/** @var StorageObject $object */
 			foreach ($objects as $object) {
-				$file = basename($object->name);
-				if ($file !== basename($path) && $file !== '.') {
+				$file = \OC\Files\Utils\PathHelper::basename($object->name);
+				if ($file !== \OC\Files\Utils\PathHelper::basename($path) && $file !== '.') {
 					$files[] = $file;
 				}
 			}

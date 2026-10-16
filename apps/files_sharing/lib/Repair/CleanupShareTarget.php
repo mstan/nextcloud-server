@@ -99,7 +99,7 @@ class CleanupShareTarget implements IRepairStepExpensive {
 			try {
 				$targetParentNode = $this->rootFolder->get(\OC\Files\Utils\PathHelper::dirname($absoluteNewTarget));
 			} catch (NotFoundException) {
-				$absoluteNewTarget = $userFolder->getFullPath(basename($newTarget));
+				$absoluteNewTarget = $userFolder->getFullPath(\OC\Files\Utils\PathHelper::basename($newTarget));
 				$targetParentNode = $userFolder;
 			}
 

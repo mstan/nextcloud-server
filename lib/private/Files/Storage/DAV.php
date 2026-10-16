@@ -963,7 +963,7 @@ class DAV extends Common {
 		}
 
 		return [
-			'name' => basename($path),
+			'name' => \OC\Files\Utils\PathHelper::basename($path),
 			'mtime' => $mtime,
 			'storage_mtime' => $mtime,
 			'size' => $size,

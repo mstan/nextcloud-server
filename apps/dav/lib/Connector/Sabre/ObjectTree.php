@@ -75,7 +75,7 @@ class ObjectTree extends CachingTree {
 
 		if ($path) {
 			try {
-				$this->fileView->verifyPath($path, basename($path));
+				$this->fileView->verifyPath($path, \OC\Files\Utils\PathHelper::basename($path));
 			} catch (InvalidPathException $ex) {
 				throw new InvalidPath($ex->getMessage());
 			}

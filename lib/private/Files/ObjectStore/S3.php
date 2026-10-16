@@ -139,7 +139,7 @@ class S3 implements IObjectStore, IObjectStoreMultiPartUpload, IObjectStoreMetaD
 			if (is_array($result['Contents'])) {
 				foreach ($result['Contents'] as $object) {
 					yield [
-						'urn' => basename($object['Key']),
+						'urn' => \OC\Files\Utils\PathHelper::basename($object['Key']),
 						'metadata' => [
 							'mtime' => $object['LastModified'],
 							'etag' => trim($object['ETag'], '"'),

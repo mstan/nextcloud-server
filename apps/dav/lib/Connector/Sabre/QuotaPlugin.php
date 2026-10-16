@@ -100,7 +100,7 @@ class QuotaPlugin extends \Sabre\DAV\ServerPlugin {
 			return true;
 		}
 
-		$filePath = $parent->getPath() . '/' . basename($uri);
+		$filePath = $parent->getPath() . '/' . \OC\Files\Utils\PathHelper::basename($uri);
 		return $this->checkQuota($filePath);
 	}
 

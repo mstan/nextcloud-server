@@ -7,8 +7,9 @@ Scans lib/, core/, apps/ and the root entry points (at <git ref> via
 `git grep`, or the work tree) for:
 
   dirname   bare dirname() calls. On Windows dirname('/x') returns '\\', so
-            virtual paths must use PathHelper::dirname(). Bare calls are
-            allowed only on OS paths, listed in lint-windows-allow.txt.
+  basename  and basename('a\\b') returns 'b'; virtual paths must use
+            PathHelper::dirname()/basename(). Bare calls are allowed only
+            on OS paths, listed in lint-windows-allow.txt.
   posix     posix_*() calls not guarded by function_exists() on the same or
             the preceding three lines (PHP for Windows has no ext-posix).
 
@@ -27,6 +28,7 @@ ALLOW = os.path.join(HERE, 'lint-windows-allow.txt')
 ROOT = os.path.normpath(os.path.join(HERE, '..', '..'))
 SKIP = re.compile(r'(^|/)(tests?|vendor|composer|3rdparty|node_modules)/')
 BARE_DIRNAME = re.compile(r'(?<![\w\\>:$])(?<!function )dirname\(')
+BARE_BASENAME = re.compile(r'(?<![\w\\>:$])(?<!function )basename\(')
 POSIX = re.compile(r'(?<![\w>:$])posix_\w+\(')
 GUARD = re.compile(r"function_exists\(\s*'posix_|PHP_OS_FAMILY|DIRECTORY_SEPARATOR")
 
@@ -54,11 +56,12 @@ def show(ref, path):
 
 def findings(ref):
     out = set()
-    for path, _, text in grep(ref, r'dirname\('):
-        if SKIP.search(path) or text.lstrip().startswith(('*', '//', '#')):
-            continue
-        if BARE_DIRNAME.search(text) and '__DIR__' not in text and '__FILE__' not in text:
-            out.add(('dirname', path, text.strip()))
+    for kind, pattern in (('dirname', BARE_DIRNAME), ('basename', BARE_BASENAME)):
+        for path, _, text in grep(ref, kind + r'\('):
+            if SKIP.search(path) or text.lstrip().startswith(('*', '//', '#')):
+                continue
+            if pattern.search(text) and '__DIR__' not in text and '__FILE__' not in text:
+                out.add((kind, path, text.strip()))
     cache = {}
     for path, num, text in grep(ref, r'posix_[a-z_]+\('):
         if SKIP.search(path) or text.lstrip().startswith(('*', '//', '#')) or not POSIX.search(text):

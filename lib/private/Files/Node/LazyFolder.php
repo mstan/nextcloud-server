@@ -305,7 +305,7 @@ class LazyFolder implements Folder {
 	#[\Override]
 	public function getName() {
 		if (isset($this->data['path'])) {
-			return basename($this->data['path']);
+			return \OC\Files\Utils\PathHelper::basename($this->data['path']);
 		}
 		if (isset($this->data['name'])) {
 			return $this->data['name'];

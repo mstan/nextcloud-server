@@ -80,6 +80,20 @@ class LocalCaseInsensitiveTest extends TestCase {
 		$this->assertFalse($this->storage->file_exists('photo.jpg'));
 	}
 
+	/** On Windows '\' is an OS separator: a name containing it must never reach the disk. */
+	public function testBackslashNameRefused(): void {
+		if (DIRECTORY_SEPARATOR !== '\\') {
+			$this->markTestSkipped('only meaningful where \\ is a path separator');
+		}
+		$this->storage->mkdir('a');
+		$this->expectException(ForbiddenException::class);
+		try {
+			$this->storage->file_put_contents('a\\b.txt', 'x');
+		} finally {
+			$this->assertFileDoesNotExist($this->tmpDir . '/a/b.txt');
+		}
+	}
+
 	public function testExactNameStillWritable(): void {
 		$this->storage->file_put_contents('same.txt', '1');
 		$this->assertSame(1, $this->storage->file_put_contents('same.txt', '2'));

@@ -449,7 +449,7 @@ class Directory extends Node implements
 				}
 			}
 
-			$fileName = basename($destinationPath);
+			$fileName = \OC\Files\Utils\PathHelper::basename($destinationPath);
 			try {
 				$this->fileView->verifyPath($destinationDir, $fileName);
 			} catch (InvalidPathException $ex) {

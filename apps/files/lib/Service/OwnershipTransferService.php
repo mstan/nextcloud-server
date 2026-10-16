@@ -122,7 +122,7 @@ class OwnershipTransferService {
 
 			$finalTarget = "$destinationUid/files/" . $this->sanitizeFolderName($l->t('Transferred from %1$s on %2$s', [$cleanUserName, $date]));
 			try {
-				$view->verifyPath(\OC\Files\Utils\PathHelper::dirname($finalTarget), basename($finalTarget));
+				$view->verifyPath(\OC\Files\Utils\PathHelper::dirname($finalTarget), \OC\Files\Utils\PathHelper::basename($finalTarget));
 			} catch (InvalidPathException $e) {
 				$finalTarget = "$destinationUid/files/" . $this->sanitizeFolderName($l->t('Transferred from %1$s on %2$s', [$sourceUid, $date]));
 			}
@@ -460,7 +460,7 @@ class OwnershipTransferService {
 		// Else only the content inside folder is transferred which is not correct.
 		if ($sourcePath !== "$sourceUid/files") {
 			$view->mkdir($finalTarget);
-			$finalTarget = $finalTarget . '/' . basename($sourcePath);
+			$finalTarget = $finalTarget . '/' . \OC\Files\Utils\PathHelper::basename($sourcePath);
 		}
 		$sourceInfo = $view->getFileInfo($sourcePath);
 

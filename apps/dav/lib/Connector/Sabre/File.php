@@ -412,7 +412,7 @@ class File extends Node implements IFile {
 	private function getPartFileBasePath($path) {
 		$partFileInStorage = Server::get(IConfig::class)->getSystemValue('part_file_in_storage', true);
 		if ($partFileInStorage) {
-			$filename = basename($path);
+			$filename = \OC\Files\Utils\PathHelper::basename($path);
 			// hash does not need to be secure but fast and semi unique
 			$hashedFilename = hash('xxh128', $filename);
 			return substr($path, 0, strlen($path) - strlen($filename)) . $hashedFilename;

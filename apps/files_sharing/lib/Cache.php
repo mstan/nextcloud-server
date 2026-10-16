@@ -155,7 +155,7 @@ class Cache extends CacheJail {
 			}
 
 			if ($this->share->getNodeId() === $entry['fileid']) {
-				$entry['name'] = basename($this->share->getTarget());
+				$entry['name'] = \OC\Files\Utils\PathHelper::basename($this->share->getTarget());
 			}
 		} catch (StorageNotAvailableException $e) {
 			// thrown by FailedStorage e.g. when the sharer does not exist anymore

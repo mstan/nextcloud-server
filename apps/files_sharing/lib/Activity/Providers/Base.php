@@ -105,7 +105,7 @@ abstract class Base implements IProvider {
 		return [
 			'type' => 'file',
 			'id' => $id,
-			'name' => basename($path),
+			'name' => \OC\Files\Utils\PathHelper::basename($path),
 			'path' => trim($path, '/'),
 			'link' => $this->url->linkToRouteAbsolute('files.viewcontroller.showFile', ['fileid' => $id]),
 		];

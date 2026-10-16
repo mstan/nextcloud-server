@@ -306,7 +306,7 @@ class Cache implements ICache {
 		if ($data['parent'] === -1 && $file !== '') {
 			throw new \Exception('Parent folder not in filecache for ' . $file);
 		}
-		$data['name'] = basename($file);
+		$data['name'] = \OC\Files\Utils\PathHelper::basename($file);
 
 		[$values, $extensionValues] = $this->normalizeData($data);
 		$storageId = $this->getNumericStorageId();
@@ -853,7 +853,7 @@ class Cache implements ICache {
 			$query->update('filecache')
 				->set('path', $query->createNamedParameter($targetPath))
 				->set('path_hash', $query->createNamedParameter(md5($targetPath)))
-				->set('name', $query->createNamedParameter(basename($targetPath)))
+				->set('name', $query->createNamedParameter(\OC\Files\Utils\PathHelper::basename($targetPath)))
 				->set('parent', $query->createNamedParameter($newParentId, IQueryBuilder::PARAM_INT))
 				->whereStorageId($sourceStorageId)
 				->whereFileId($sourceId);
@@ -1386,7 +1386,7 @@ class Cache implements ICache {
 			if ($cacheItem['path'] === $sourcePath) {
 				$cacheItem['path'] = $targetPath;
 				$cacheItem['parent'] = $this->getParentId($targetPath);
-				$cacheItem['name'] = basename($cacheItem['path']);
+				$cacheItem['name'] = \OC\Files\Utils\PathHelper::basename($cacheItem['path']);
 			} else {
 				$cacheItem['path'] = $targetPath . '/' . substr($cacheItem['path'], $sourcePathLength + 1); // +1 for the leading slash
 			}

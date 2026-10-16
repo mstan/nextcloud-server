@@ -572,7 +572,7 @@ class Folder extends Node implements IFolder {
 				if (!($folder instanceof Folder)) {
 					throw new NotPermittedException("Unable to create folder $path. Parent is not a directory.");
 				}
-				return $folder->newFolder(basename($path));
+				return $folder->newFolder(\OC\Files\Utils\PathHelper::basename($path));
 			}
 			$i++;
 			if ($i === $maxRetries) {

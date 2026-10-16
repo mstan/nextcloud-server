@@ -358,7 +358,7 @@ class Provider implements IProvider {
 		return [
 			'type' => 'file',
 			'id' => (string)$id,
-			'name' => basename($path),
+			'name' => \OC\Files\Utils\PathHelper::basename($path),
 			'path' => trim($path, '/'),
 			'link' => $this->url->linkToRouteAbsolute('files.viewcontroller.showFile', ['fileid' => $id]),
 		];
@@ -377,7 +377,7 @@ class Provider implements IProvider {
 			return $this->fileEncrypted[$fileId];
 		}
 
-		$fileName = basename($path);
+		$fileName = \OC\Files\Utils\PathHelper::basename($path);
 		if (!preg_match('/^[0-9a-fA-F]{32}$/', $fileName)) {
 			$this->fileEncrypted[$fileId] = false;
 			return $this->fileEncrypted[$fileId];

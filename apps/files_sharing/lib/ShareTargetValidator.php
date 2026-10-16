@@ -55,7 +55,7 @@ class ShareTargetValidator {
 		callable $getMountByPath,
 		array $childShares,
 	): string {
-		$mountPoint = basename($share->getTarget());
+		$mountPoint = \OC\Files\Utils\PathHelper::basename($share->getTarget());
 		$parent = \OC\Files\Utils\PathHelper::dirname($share->getTarget());
 
 		$recipientView = $this->getViewForUser($user);

@@ -155,7 +155,7 @@ class CertificateManager implements ICertificateManager {
 		$path = $this->getPathToCertificates() . 'uploads/' . $name;
 		$directory = \OC\Files\Utils\PathHelper::dirname($path);
 
-		$this->view->verifyPath($directory, basename($path));
+		$this->view->verifyPath($directory, \OC\Files\Utils\PathHelper::basename($path));
 		$this->bundlePath = null;
 
 		if (!$this->view->file_exists($directory)) {
@@ -180,7 +180,7 @@ class CertificateManager implements ICertificateManager {
 		$path = $this->getPathToCertificates() . 'uploads/' . $name;
 
 		try {
-			$this->view->verifyPath(\OC\Files\Utils\PathHelper::dirname($path), basename($path));
+			$this->view->verifyPath(\OC\Files\Utils\PathHelper::dirname($path), \OC\Files\Utils\PathHelper::basename($path));
 		} catch (\Exception) {
 			return false;
 		}

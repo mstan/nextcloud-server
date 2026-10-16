@@ -110,7 +110,7 @@ class Manager implements IManager {
 			}
 			/** @var Folder $folder */
 			$folder = $userFolder->get(\OC\Files\Utils\PathHelper::dirname($path));
-			$file = $folder->newFile(basename($path));
+			$file = $folder->newFile(\OC\Files\Utils\PathHelper::basename($path));
 			$editor = $this->getEditor($editorId);
 			$creators = $editor->getCreators();
 			foreach ($creators as $creator) {
