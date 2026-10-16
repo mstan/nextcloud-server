@@ -395,7 +395,7 @@ EOF;
 
 		$this->htmlBody .= vsprintf($this->heading, [htmlspecialchars($title)]);
 		if ($plainTitle !== false) {
-			$this->plainBody .= $plainTitle . PHP_EOL . PHP_EOL;
+			$this->plainBody .= $plainTitle . "\n" . "\n";
 		}
 	}
 
@@ -433,7 +433,7 @@ EOF;
 
 		$this->htmlBody .= vsprintf($this->bodyText, [$text]);
 		if ($plainText !== false) {
-			$this->plainBody .= $plainText . PHP_EOL . PHP_EOL;
+			$this->plainBody .= $plainText . "\n" . "\n";
 		}
 	}
 
@@ -490,7 +490,7 @@ EOF;
 				if ($plainMetaInfo !== false) {
 					$this->plainBody .= ' (' . $plainMetaInfo . ')';
 				}
-				$this->plainBody .= PHP_EOL;
+				$this->plainBody .= "\n";
 			} else {
 				/*
 				 * Caller can set plainIndent > 0 to format plainText in tabular fashion.
@@ -566,8 +566,8 @@ EOF;
 		$textColor = $this->themingDefaults->getDefaultTextColorPrimary();
 
 		$this->htmlBody .= vsprintf($this->buttonGroup, [$color, $color, $urlLeft, $color, $textColor, $textColor, $textLeft, $urlRight, $textRight]);
-		$this->plainBody .= PHP_EOL . $plainTextLeft . ': ' . $urlLeft . PHP_EOL;
-		$this->plainBody .= $plainTextRight . ': ' . $urlRight . PHP_EOL . PHP_EOL;
+		$this->plainBody .= "\n" . $plainTextLeft . ': ' . $urlLeft . "\n";
+		$this->plainBody .= $plainTextRight . ': ' . $urlRight . "\n" . "\n";
 	}
 
 	/**
@@ -602,7 +602,7 @@ EOF;
 			$this->plainBody .= $plainText . ': ';
 		}
 
-		$this->plainBody .= $url . PHP_EOL;
+		$this->plainBody .= $url . "\n";
 	}
 
 	/**
@@ -644,8 +644,8 @@ EOF;
 
 		$this->htmlBody .= vsprintf($this->footer, [$text]);
 		$this->htmlBody .= $this->tail;
-		$this->plainBody .= PHP_EOL . '-- ' . PHP_EOL;
-		$this->plainBody .= str_replace('<br>', PHP_EOL, $text);
+		$this->plainBody .= "\n" . '-- ' . "\n";
+		$this->plainBody .= str_replace('<br>', "\n", $text);
 	}
 
 	/**
