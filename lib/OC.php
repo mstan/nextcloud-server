@@ -177,7 +177,7 @@ class OC {
 			foreach ($config_paths as $paths) {
 				if (isset($paths['url']) && isset($paths['path'])) {
 					$paths['url'] = rtrim($paths['url'], '/');
-					$paths['path'] = rtrim($paths['path'], '/');
+					$paths['path'] = rtrim(\OC\Files\Utils\PathHelper::normalizeOsPath($paths['path']), '/');
 					OC::$APPSROOTS[] = $paths;
 				}
 			}

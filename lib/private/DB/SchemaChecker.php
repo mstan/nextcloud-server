@@ -213,7 +213,7 @@ class SchemaChecker {
 				new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
 				\RecursiveIteratorIterator::LEAVES_ONLY
 			),
-			'#^.+\\/Version[^\\/]{1,255}\\.php$#i',
+			'#^.+[\\\\/]Version[^\\\\/]{1,255}\\.php$#i', // either separator: realpath() returns '\' on Windows
 			\RegexIterator::GET_MATCH);
 
 		return array_keys(iterator_to_array($iterator));

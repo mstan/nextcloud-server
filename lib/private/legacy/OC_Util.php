@@ -491,7 +491,7 @@ class OC_Util {
 	public static function checkDataDirectoryValidity($dataDirectory) {
 		$l = Server::get(IFactory::class)->get('lib');
 		$errors = [];
-		if ($dataDirectory[0] !== '/') {
+		if (!\OC\Files\Utils\PathHelper::isAbsoluteOsPath($dataDirectory)) {
 			$errors[] = [
 				'error' => $l->t('Your data directory must be an absolute path.'),
 				'hint' => $l->t('Check the value of "datadirectory" in your configuration.')

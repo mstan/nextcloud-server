@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OC\IntegrityCheck;
 
 use OC\Core\Command\Maintenance\Mimetype\GenerateMimetypeFileBuilder;
+use OC\Files\Utils\PathHelper;
 use OC\IntegrityCheck\Exceptions\InvalidSignatureException;
 use OC\IntegrityCheck\Helpers\EnvironmentHelper;
 use OC\IntegrityCheck\Helpers\FileAccessHelper;
@@ -117,6 +118,8 @@ class Checker {
 			if ($data->isDir()) {
 				continue;
 			}
+			// Signature keys are '/'-separated; directory iterators yield '\' on Windows.
+			$filename = PathHelper::normalizeOsPath($filename);
 
 			$relativeFileName = substr($filename, $baseDirectoryLength);
 			$relativeFileName = ltrim($relativeFileName, '/');

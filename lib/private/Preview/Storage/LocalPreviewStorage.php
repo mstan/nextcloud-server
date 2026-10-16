@@ -162,7 +162,8 @@ class LocalPreviewStorage implements IPreviewStorage {
 				continue;
 			}
 
-			$filePath = $file->getPathname();
+			// '/'-separated like every path this class builds; iterators yield '\' on Windows.
+			$filePath = \OC\Files\Utils\PathHelper::normalizeOsPath($file->getPathname());
 			if (isset($skipPaths[$filePath])) {
 				continue;
 			}
@@ -177,7 +178,7 @@ class LocalPreviewStorage implements IPreviewStorage {
 			$preview->setMtime($file->getMtime());
 			$preview->setEncrypted(false);
 
-			$realPath = $file->getRealPath();
+			$realPath = \OC\Files\Utils\PathHelper::normalizeOsPath((string)$file->getRealPath());
 			$pendingByFileId[$preview->getFileId()][] = [
 				'preview' => $preview,
 				'filePath' => $filePath,

@@ -49,7 +49,7 @@ class PhpOpcacheSetup implements ISetupCheck {
 
 		// Check whether Nextcloud is allowed to use the OPcache API
 		$isPermitted = true;
-		$permittedPath = (string)$this->iniGetWrapper->getString('opcache.restrict_api');
+		$permittedPath = \OC\Files\Utils\PathHelper::normalizeOsPath((string)$this->iniGetWrapper->getString('opcache.restrict_api'));
 		if ($permittedPath !== '' && !str_starts_with(\OC::$SERVERROOT, rtrim($permittedPath, '/'))) {
 			$isPermitted = false;
 		}

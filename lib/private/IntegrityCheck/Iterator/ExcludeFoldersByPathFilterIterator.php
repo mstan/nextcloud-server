@@ -20,7 +20,7 @@ class ExcludeFoldersByPathFilterIterator extends \RecursiveFilterIterator {
 
 		$appFolders = \OC::$APPSROOTS;
 		foreach ($appFolders as $key => $appFolder) {
-			$appFolders[$key] = rtrim($appFolder['path'], '/');
+			$appFolders[$key] = rtrim(\OC\Files\Utils\PathHelper::normalizeOsPath($appFolder['path']), '/');
 		}
 
 		$excludedFolders = [
@@ -38,7 +38,7 @@ class ExcludeFoldersByPathFilterIterator extends \RecursiveFilterIterator {
 		];
 		$customDataDir = Server::get(IConfig::class)->getSystemValueString('datadirectory', '');
 		if ($customDataDir !== '') {
-			$excludedFolders[] = rtrim($customDataDir, '/');
+			$excludedFolders[] = rtrim(\OC\Files\Utils\PathHelper::normalizeOsPath($customDataDir), '/');
 		}
 
 		$this->excludedFolders = array_merge($excludedFolders, $appFolders);
@@ -47,7 +47,7 @@ class ExcludeFoldersByPathFilterIterator extends \RecursiveFilterIterator {
 	#[\Override]
 	public function accept(): bool {
 		return !\in_array(
-			$this->current()->getPathName(),
+			\OC\Files\Utils\PathHelper::normalizeOsPath($this->current()->getPathName()),
 			$this->excludedFolders,
 			true
 		);

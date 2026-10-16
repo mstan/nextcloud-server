@@ -342,7 +342,7 @@ class Setup {
 			$dbType = 'sqlite';
 		}
 
-		$dataDir = htmlspecialchars_decode($options['directory']);
+		$dataDir = \OC\Files\Utils\PathHelper::normalizeOsPath(htmlspecialchars_decode($options['directory']));
 
 		$class = self::DB_SETUP_CLASSES[$dbType];
 		/** @var AbstractDatabase $dbSetup */
