@@ -202,8 +202,9 @@ func Spec(c config.Config) (proc.Spec, error) {
 			Name: "db", Path: filepath.Join(binDir(c), "postgres.exe"),
 			// postgres.exe refuses to run with administrative rights; the
 			// service account (NT SERVICE\ncwin) is unprivileged.
-			Args: []string{"-D", dataDir(c), "-p", strconv.Itoa(c.Database.Port), "-c", "listen_addresses=127.0.0.1"},
-			Log:  logPath, Ready: ready, PreStart: func() error { return proc.PortsFree(c.Database.Port) },
+			Args:         []string{"-D", dataDir(c), "-p", strconv.Itoa(c.Database.Port), "-c", "listen_addresses=127.0.0.1"},
+			Unprivileged: true,
+			Log:          logPath, Ready: ready, PreStart: func() error { return proc.PortsFree(c.Database.Port) },
 			Stop: func(ctx context.Context) error {
 				cmd := exec.CommandContext(ctx, filepath.Join(binDir(c), "pg_ctl.exe"), "stop", "-D", dataDir(c), "-m", "fast", "-W")
 				cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
