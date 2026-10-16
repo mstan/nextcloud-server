@@ -97,7 +97,7 @@ class Preview extends SnowflakeAwareEntity {
 
 	public static function fromPath(string $path, IMimeTypeDetector $mimeTypeDetector): Preview|false {
 		$preview = new self();
-		$preview->setFileId((int)basename(\OC\Files\Utils\PathHelper::dirname($path)));
+		$preview->setFileId((int)\OC\Files\Utils\PathHelper::basename(\OC\Files\Utils\PathHelper::dirname($path)));
 
 		$fileName = pathinfo($path, PATHINFO_FILENAME) . '.' . pathinfo($path, PATHINFO_EXTENSION);
 		$ok = preg_match('/(([A-Za-z0-9\+\/]+)-)?([0-9]+)-([0-9]+)(-(crop))?(-(max))?\.([a-z]{3,4})$/', $fileName, $matches);

@@ -163,7 +163,7 @@ class ConversionManager implements IConversionManager {
 			$parent = $file->getParent();
 
 			// Folder permissions is already checked in checkDestination method
-			$newName = $parent->getNonExistingName(basename($destination));
+			$newName = $parent->getNonExistingName(\OC\Files\Utils\PathHelper::basename($destination));
 			$destination = $parent->getFullPath($newName);
 		}
 

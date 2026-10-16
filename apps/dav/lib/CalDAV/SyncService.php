@@ -66,7 +66,7 @@ class SyncService extends ASyncService {
 		// TODO: use multi-get for download
 		$downloadedEvents = 0;
 		foreach ($response['response'] as $resource => $status) {
-			$objectUri = basename($resource);
+			$objectUri = \OC\Files\Utils\PathHelper::basename($resource);
 			if (isset($status[200])) {
 				$absoluteUrl = $this->prepareUri($url, $resource);
 				$vCard = $this->download($absoluteUrl, $username, $sharedSecret);

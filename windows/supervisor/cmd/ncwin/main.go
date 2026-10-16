@@ -80,6 +80,8 @@ func main() {
 		err = grantPath(args)
 	case "setup":
 		err = runSetup(args)
+	case "configure":
+		err = runConfigure(args)
 	case "ca":
 		err = ca(args)
 	case "update":
@@ -99,7 +101,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ncwin setup|update|ca|shutdown|install|uninstall|start|stop|status|events|occ|grant-path|run|render|version [args]")
+	fmt.Fprintln(os.Stderr, "usage: ncwin configure|setup|update|ca|shutdown|install|uninstall|start|stop|status|events|occ|grant-path|run|render|version [args]")
 	os.Exit(2)
 }
 
@@ -235,16 +237,17 @@ func runSetup(args []string) error {
 	adminUser := fs.String("admin-user", "admin", "Nextcloud admin user to create")
 	passEnv := fs.String("admin-pass-env", "NCWIN_ADMIN_PASS", "environment variable holding the admin password")
 	noACL := fs.Bool("no-acl", false, "skip granting the service account access (developer installs)")
+	genPass := fs.Bool("generate-admin-pass", false, "generate the admin password into <state_dir>/initial-admin-password.txt")
 	_ = fs.Parse(args)
 	pass := os.Getenv(*passEnv)
-	if pass == "" {
-		return fmt.Errorf("set %s to the admin password", *passEnv)
+	if pass == "" && !*genPass {
+		return fmt.Errorf("set %s to the admin password, or pass --generate-admin-pass", *passEnv)
 	}
 	c, err := config.Load(*cfgPath)
 	if err != nil {
 		return err
 	}
-	o := setup.Options{AdminUser: *adminUser, AdminPass: pass, Account: service.Account, Log: os.Stdout}
+	o := setup.Options{AdminUser: *adminUser, AdminPass: pass, GenerateAdminPass: *genPass, Account: service.Account, Log: os.Stdout}
 	if *noACL {
 		o.Account = ""
 	}
@@ -339,4 +342,40 @@ func runUpdate(args []string) error {
 	return update.Run(ctx, c, scmService{}, update.Options{
 		Source: *from, SHA256: *sum, Repo: c.Update.Repo, ExternalDBBackedUp: *extOK, Log: os.Stdout,
 	})
+}
+
+// runConfigure writes ncwin.toml from installer answers (no secrets; database
+// passwords are generated). An existing file is left untouched.
+func runConfigure(args []string) error {
+	fs := flag.NewFlagSet("configure", flag.ExitOnError)
+	cfgPath := fs.String("config", defaultConfig, "ncwin.toml to write")
+	o := setup.ConfigureOptions{}
+	fs.StringVar(&o.InstallDir, "install-dir", "", "")
+	fs.StringVar(&o.StateDir, "state-dir", `C:\ProgramData\ncwin`, "")
+	fs.StringVar(&o.DataDir, "data-dir", "", "")
+	fs.StringVar(&o.DB, "db", "pgsql", "sqlite | pgsql | mysql (bundled)")
+	fs.IntVar(&o.HTTPPort, "http-port", 80, "")
+	fs.IntVar(&o.HTTPSPort, "https-port", 443, "")
+	hosts := fs.String("hostnames", "", "comma-separated LAN host names / IPs")
+	fs.StringVar(&o.PublicDomain, "public-domain", "", "optional public domain (Let's Encrypt)")
+	fs.StringVar(&o.ACMEEmail, "acme-email", "", "")
+	_ = fs.Parse(args)
+	if o.InstallDir == "" {
+		exe, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		o.InstallDir = filepath.Dir(exe)
+	}
+	for _, d := range []*string{&o.InstallDir, &o.StateDir, &o.DataDir} {
+		*d = strings.TrimRight(*d, `\/`) // MSI directory properties end in a backslash
+	}
+	o.Hostnames = strings.Split(*hosts, ",")
+	wrote, err := setup.Configure(*cfgPath, o)
+	if err == nil && !wrote {
+		fmt.Println("kept existing", *cfgPath)
+	} else if err == nil {
+		fmt.Println("wrote", *cfgPath)
+	}
+	return err
 }

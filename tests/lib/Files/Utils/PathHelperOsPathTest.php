@@ -51,6 +51,23 @@ class PathHelperOsPathTest extends TestCase {
 		$this->assertSame($expected, PathHelper::dirname($path));
 	}
 
+	public static function basenameProvider(): array {
+		return [
+			['/admin/files/a.txt', '', 'a.txt'],
+			['a.txt', '', 'a.txt'],
+			['/admin/files/', '', 'files'],
+			['foo\\bar', '', 'foo\\bar'], // '\' is a forbidden name character, not a separator
+			['/dir/foo\\bar.txt', '', 'foo\\bar.txt'],
+			['/x/Version1.php', '.php', 'Version1'],
+		];
+	}
+
+	/** Same result on every platform; plain basename() splits at '\' on Windows. */
+	#[DataProvider('basenameProvider')]
+	public function testBasename(string $path, string $suffix, string $expected): void {
+		$this->assertSame($expected, PathHelper::basename($path, $suffix));
+	}
+
 	public function testNormalizeOsPath(): void {
 		if (DIRECTORY_SEPARATOR === '\\') {
 			$this->assertSame('C:/x/y', PathHelper::normalizeOsPath('C:\\x\\y'));

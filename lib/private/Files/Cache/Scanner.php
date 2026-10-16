@@ -104,7 +104,7 @@ class Scanner extends BasicEmitter implements IScanner {
 	public function scanFile($file, $reuseExisting = 0, $parentId = -1, $cacheData = null, $lock = true, $data = null) {
 		if ($file !== '') {
 			try {
-				$this->storage->verifyPath(\OC\Files\Utils\PathHelper::dirname($file), basename($file));
+				$this->storage->verifyPath(\OC\Files\Utils\PathHelper::dirname($file), \OC\Files\Utils\PathHelper::basename($file));
 			} catch (\Exception $e) {
 				return null;
 			}

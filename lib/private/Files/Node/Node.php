@@ -325,7 +325,7 @@ class Node implements INode {
 	 */
 	#[\Override]
 	public function getName() {
-		return basename($this->path);
+		return \OC\Files\Utils\PathHelper::basename($this->path);
 	}
 
 	/**

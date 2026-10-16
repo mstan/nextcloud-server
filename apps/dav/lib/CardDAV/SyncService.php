@@ -69,7 +69,7 @@ class SyncService extends ASyncService {
 		// 3. apply changes
 		// TODO: use multi-get for download
 		foreach ($response['response'] as $resource => $status) {
-			$cardUri = basename($resource);
+			$cardUri = \OC\Files\Utils\PathHelper::basename($resource);
 			if (isset($status[200])) {
 				$absoluteUrl = $this->prepareUri($url, $resource);
 				$vCard = $this->download($absoluteUrl, $userName, $sharedSecret);

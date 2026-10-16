@@ -109,7 +109,7 @@ class Streamer {
 	 * @throws InvalidPathException
 	 */
 	public function addDirRecursive(string $dir, string $internalDir = ''): void {
-		$dirname = basename($dir);
+		$dirname = \OC\Files\Utils\PathHelper::basename($dir);
 		$rootDir = $internalDir . $dirname;
 		if (!empty($rootDir)) {
 			$this->streamerInstance->addEmptyDir($rootDir);

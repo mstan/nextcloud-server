@@ -187,7 +187,7 @@ class Detection implements IMimeTypeDetector {
 	public function detectPath($path): string {
 		$this->loadMappings();
 
-		$fileName = basename($path);
+		$fileName = \OC\Files\Utils\PathHelper::basename($path);
 
 		// remove leading dot on hidden files with a file extension
 		$fileName = ltrim($fileName, '.');

@@ -69,6 +69,26 @@ class PathHelper {
 	}
 
 	/**
+	 * basename() for Nextcloud's '/'-separated virtual and storage paths.
+	 *
+	 * On Windows basename() also splits on '\', so basename('a\b') is 'b' and
+	 * name validation never sees the forbidden '\'. This splits on '/' only,
+	 * everywhere.
+	 */
+	public static function basename(string $path, string $suffix = ''): string {
+		if (DIRECTORY_SEPARATOR !== '\\') {
+			return basename($path, $suffix);
+		}
+		$path = rtrim($path, '/');
+		$i = strrpos($path, '/');
+		$base = $i === false ? $path : substr($path, $i + 1);
+		if ($suffix !== '' && $suffix !== $base && str_ends_with($base, $suffix)) {
+			$base = substr($base, 0, -strlen($suffix));
+		}
+		return $base;
+	}
+
+	/**
 	 * Use '/' as the separator in an OS file-system path.
 	 *
 	 * On Windows, realpath(), __DIR__, getcwd() and directory iterators return

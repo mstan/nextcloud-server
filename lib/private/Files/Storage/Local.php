@@ -228,7 +228,7 @@ class Local extends Common {
 		$data['etag'] = $this->calculateEtag($path, $stat);
 		$data['storage_mtime'] = $data['mtime'];
 		$data['permissions'] = $permissions;
-		$data['name'] = basename($path);
+		$data['name'] = \OC\Files\Utils\PathHelper::basename($path);
 
 		return $data;
 	}
@@ -362,7 +362,7 @@ class Local extends Common {
 			return;
 		}
 		if (file_exists($this->getSourcePath($path))) {
-			throw new ForbiddenException('An item with the same name in different letter case already exists: ' . basename($path), false);
+			throw new ForbiddenException('An item with the same name in different letter case already exists: ' . \OC\Files\Utils\PathHelper::basename($path), false);
 		}
 	}
 
@@ -608,6 +608,14 @@ class Local extends Common {
 	 */
 	public function getSourcePath(string $path): string {
 		if (Filesystem::isFileBlacklisted($path)) {
+			throw new ForbiddenException('Invalid path: ' . $path, false);
+		}
+
+		// Nextcloud forbids '\' in names, but on Windows the OS treats it as a
+		// separator: "a\b.txt" would land in folder "a" behind the file cache's
+		// back. Validation that looks at basename() (which on Windows also
+		// splits on '\') can miss it, so refuse it here, where it would reach the OS.
+		if (DIRECTORY_SEPARATOR === '\\' && str_contains($path, '\\') && $this->datadir !== '/') {
 			throw new ForbiddenException('Invalid path: ' . $path, false);
 		}
 

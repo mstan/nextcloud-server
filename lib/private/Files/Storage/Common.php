@@ -509,7 +509,7 @@ abstract class Common implements Storage, ILockingStorage, IWriteStreamStorage, 
 		// verify also the path is valid
 		if ($path && $path !== '/' && $path !== '.') {
 			try {
-				$this->verifyPath(\OC\Files\Utils\PathHelper::dirname($path), basename($path));
+				$this->verifyPath(\OC\Files\Utils\PathHelper::dirname($path), \OC\Files\Utils\PathHelper::basename($path));
 			} catch (InvalidPathException $e) {
 				// Ignore invalid file type exceptions on directories
 				if ($e->getCode() !== FilenameValidator::INVALID_FILE_TYPE) {
@@ -674,7 +674,7 @@ abstract class Common implements Storage, ILockingStorage, IWriteStreamStorage, 
 		$data['etag'] = $this->getETag($path);
 		$data['storage_mtime'] = $data['mtime'];
 		$data['permissions'] = $permissions;
-		$data['name'] = basename($path);
+		$data['name'] = \OC\Files\Utils\PathHelper::basename($path);
 
 		return $data;
 	}

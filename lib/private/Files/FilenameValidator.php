@@ -215,7 +215,7 @@ class FilenameValidator implements IFilenameValidator {
 	 */
 	public function isForbidden(string $path): bool {
 		// We support paths here as this function is also used in some storage internals
-		$filename = basename($path);
+		$filename = \OC\Files\Utils\PathHelper::basename($path);
 		$filename = mb_strtolower($filename);
 
 		if ($filename === '') {

@@ -191,7 +191,7 @@ class FilesDropPlugin extends ServerPlugin {
 		}
 
 		// Finally handle conflicts on the end files
-		$uniqueName = $folder->getNonExistingName(basename($relativePath));
+		$uniqueName = $folder->getNonExistingName(\OC\Files\Utils\PathHelper::basename($relativePath));
 		$relativePath = substr($folder->getPath(), strlen($node->getPath()));
 		$path = '/files/' . $token . '/' . $relativePath . '/' . $uniqueName;
 		$url = rtrim($request->getBaseUrl(), '/') . str_replace('//', '/', $path);

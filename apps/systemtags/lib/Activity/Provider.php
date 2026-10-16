@@ -279,7 +279,7 @@ class Provider implements IProvider {
 		return [
 			'type' => 'file',
 			'id' => (string)$id,
-			'name' => basename($path),
+			'name' => \OC\Files\Utils\PathHelper::basename($path),
 			'path' => trim($path, '/'),
 		];
 	}

@@ -89,7 +89,7 @@ class FederatedCalendarSyncService extends ASyncService {
 		// Process changes from remote
 		$downloadedEvents = 0;
 		foreach ($response['response'] as $resource => $status) {
-			$objectUri = basename($resource);
+			$objectUri = \OC\Files\Utils\PathHelper::basename($resource);
 			if (isset($status[200])) {
 				// Object created or updated
 				$absoluteUrl = $this->prepareUri($credentials['remoteUrl'], $resource);

@@ -268,7 +268,7 @@ class ApiController extends Controller {
 				continue;
 			}
 
-			$basename = basename($node->getPath());
+			$basename = \OC\Files\Utils\PathHelper::basename($node->getPath());
 			$entry = [
 				'id' => $node->getId(),
 				'basename' => $basename,
@@ -296,7 +296,7 @@ class ApiController extends Controller {
 		$parentContent = $parentFolder->getDirectoryListing('httpd/unix-directory');
 		$parentData = array_map(fn (Folder $node) => [
 			'id' => $node->getId(),
-			'basename' => basename($node->getPath()),
+			'basename' => \OC\Files\Utils\PathHelper::basename($node->getPath()),
 			'displayName' => $node->getName(),
 			'children' => $node->getId() === $currentFolder->getId()
 				? $children

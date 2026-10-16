@@ -684,7 +684,7 @@ class AmazonS3 extends Common {
 		$mtime = isset($object['LastModified']) ? strtotime($object['LastModified']) : time();
 		$etag = isset($object['ETag']) ? trim($object['ETag'], '"') : '';
 		return [
-			'name' => basename($object['Key']),
+			'name' => \OC\Files\Utils\PathHelper::basename($object['Key']),
 			'mimetype' => $this->mimeDetector->detectPath($object['Key']),
 			'mtime' => $mtime,
 			'storage_mtime' => $mtime,
@@ -706,7 +706,7 @@ class AmazonS3 extends Common {
 			return $cacheEntry->getData();
 		} else {
 			return [
-				'name' => basename($path),
+				'name' => \OC\Files\Utils\PathHelper::basename($path),
 				'mimetype' => FileInfo::MIMETYPE_FOLDER,
 				'mtime' => time(),
 				'storage_mtime' => time(),

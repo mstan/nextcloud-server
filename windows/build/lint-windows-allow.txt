@@ -1,4 +1,16 @@
 # Reviewed Windows-lint exceptions (see lint_windows.py). kind<TAB>path<TAB>line
+basename	core/Command/Security/ImportCertificate.php	$name = basename($path);
+basename	lib/private/Config.php	$errorMessage = sprintf('Config file has leading content, please remove everything before "<?php" in %s', basename($file));
+basename	lib/private/DB/MigrationService.php	$className = basename($file, '.php');
+basename	lib/private/DB/MigrationService.php	preg_match('/(\d+)Date(\d+)/', basename($a), $matchA);
+basename	lib/private/DB/MigrationService.php	preg_match('/(\d+)Date(\d+)/', basename($b), $matchB);
+basename	lib/private/DB/MigrationService.php	return strnatcmp(basename($a), basename($b));
+basename	lib/private/DB/SchemaChecker.php	$fqcn = $namespace . '\\Migration\\' . basename($file, '.php');
+basename	lib/private/Files/Storage/Local.php	return is_array($content) && array_search(basename($fullPath), $content, true) !== false;
+basename	lib/private/Files/Utils/PathHelper.php	return basename($path, $suffix);
+basename	lib/private/Route/Router.php	$class = new ReflectionClass($appNameSpace . '\\Controller\\' . basename($file->getPathname(), '.php'));
+basename	lib/private/Template/JSResourceLocator.php	$scriptName = basename($resource);
+basename	lib/private/URLGenerator.php	$basename = substr(basename($file), 0, -4);
 dirname	apps/user_ldap/lib/LDAP.php	if ($this->logFile !== '' && is_writable(dirname($this->logFile)) && (!file_exists($this->logFile) || is_writable($this->logFile))) {
 dirname	core/Command/Db/Migrations/GenerateCommand.php	$this->ensureMigrationDirExists(dirname($directory));
 dirname	lib/private/DB/Connection.php	if ($logFile !== '' && is_writable(dirname($logFile)) && (!file_exists($logFile) || is_writable($logFile))) {

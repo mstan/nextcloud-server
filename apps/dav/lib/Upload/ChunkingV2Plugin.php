@@ -185,7 +185,7 @@ class ChunkingV2Plugin extends ServerPlugin {
 
 		[$storage, $storagePath] = $this->getUploadStorage($this->uploadPath);
 
-		$chunkName = basename($request->getPath());
+		$chunkName = \OC\Files\Utils\PathHelper::basename($request->getPath());
 		$partId = is_numeric($chunkName) ? (int)$chunkName : -1;
 		if (!($partId >= 1 && $partId <= 10000)) {
 			throw new BadRequest('Invalid chunk name, must be numeric between 1 and 10000');

@@ -758,7 +758,7 @@ class View {
 			}
 
 			try {
-				$this->verifyPath(\OC\Files\Utils\PathHelper::dirname($target), basename($target));
+				$this->verifyPath(\OC\Files\Utils\PathHelper::dirname($target), \OC\Files\Utils\PathHelper::basename($target));
 			} catch (InvalidPathException) {
 				return false;
 			}
@@ -1462,7 +1462,7 @@ class View {
 				$data['permissions'] |= Constants::PERMISSION_DELETE;
 			}
 			if ($internalPath === '' && $data['name']) {
-				$data['name'] = basename($path);
+				$data['name'] = \OC\Files\Utils\PathHelper::basename($path);
 			}
 
 			$ownerId = $storage->getOwner($internalPath);
@@ -1954,7 +1954,7 @@ class View {
 			[
 				'fileid' => null,
 				'mimetype' => $storage->getMimeType($internalPath),
-				'name' => basename($path),
+				'name' => \OC\Files\Utils\PathHelper::basename($path),
 				'etag' => null,
 				'size' => $storage->filesize($internalPath),
 				'mtime' => $storage->filemtime($internalPath),

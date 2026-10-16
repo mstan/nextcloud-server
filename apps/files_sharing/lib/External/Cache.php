@@ -38,7 +38,7 @@ class Cache extends \OC\Files\Cache\Cache {
 		if (!$file || $file === '') {
 			$result['is_share_mount_point'] = true;
 			$mountPoint = rtrim($this->storage->getMountPoint());
-			$result['name'] = basename($mountPoint);
+			$result['name'] = \OC\Files\Utils\PathHelper::basename($mountPoint);
 		}
 		return $result;
 	}

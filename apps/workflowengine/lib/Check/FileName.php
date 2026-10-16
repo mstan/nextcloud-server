@@ -36,7 +36,7 @@ class FileName extends AbstractStringCheck implements IFileCheck {
 	 */
 	#[\Override]
 	protected function getActualValue(): string {
-		$fileName = $this->path === null ? '' : basename($this->path);
+		$fileName = $this->path === null ? '' : \OC\Files\Utils\PathHelper::basename($this->path);
 		if ($fileName === '' && (!$this->storage->isLocal() || $this->storage->instanceOfStorage(Local::class))) {
 			// Return the mountpoint name of external storage that are not mounted as user home
 			$mountPoints = $this->mountManager->findByStorageId($this->storage->getId());

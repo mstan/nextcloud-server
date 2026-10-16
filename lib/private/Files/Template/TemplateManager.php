@@ -168,7 +168,7 @@ class TemplateManager implements ITemplateManager {
 				}
 			}
 
-			$filename = basename($filePath);
+			$filename = \OC\Files\Utils\PathHelper::basename($filePath);
 			$this->filenameValidator->validateFilename($filename);
 			$targetFile = $folder->newFile($filename, ($template instanceof File ? $template->fopen('rb') : null));
 

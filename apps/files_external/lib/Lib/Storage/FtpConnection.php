@@ -93,7 +93,7 @@ class FtpConnection {
 		$files = @ftp_nlist($this->connection, $path);
 		return array_map(function ($name) {
 			if (str_contains($name, '/')) {
-				$name = basename($name);
+				$name = \OC\Files\Utils\PathHelper::basename($name);
 			}
 			return $name;
 		}, $files);
@@ -105,7 +105,7 @@ class FtpConnection {
 		if ($files !== false) {
 			return array_map(function ($file) {
 				if (str_contains($file['name'], '/')) {
-					$file['name'] = basename($file['name']);
+					$file['name'] = \OC\Files\Utils\PathHelper::basename($file['name']);
 				}
 				return $file;
 			}, $files);

@@ -61,7 +61,7 @@ class ApiController extends OCSController {
 		$entry = [
 			'id' => $mountConfig->getId(),
 			'type' => 'dir',
-			'name' => basename($mountPoint),
+			'name' => \OC\Files\Utils\PathHelper::basename($mountPoint),
 			'path' => $path,
 			'permissions' => $permissions,
 			'scope' => $isSystemMount ? 'system' : 'personal',

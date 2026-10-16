@@ -5,7 +5,8 @@
 # Needs the image built from windows/tests/linux/Dockerfile (tag ncwin-linux-test).
 set -eu
 ref="$1"; shift
-repo="$(cd "$(dirname "$0")/../.." && pwd)"
+# Windows-style path under Git Bash/MSYS: MSYS_NO_PATHCONV is set below.
+repo="$(cd "$(dirname "$0")/../.." && (pwd -W 2>/dev/null || pwd))"
 name="cmp-$(echo "$ref" | tr '/:' '__')"
 export MSYS_NO_PATHCONV=1
 docker volume create ncwin-src >/dev/null

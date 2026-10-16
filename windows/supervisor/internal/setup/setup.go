@@ -22,6 +22,9 @@ import (
 type Options struct {
 	AdminUser string
 	AdminPass string
+	// GenerateAdminPass creates a random admin password when AdminPass is
+	// empty and stores it in <state>/initial-admin-password.txt (Administrators only).
+	GenerateAdminPass bool
 	// Account is the service account granted access ("NT SERVICE\ncwin").
 	// Empty skips ACL changes (developer runs as the current user).
 	Account string
@@ -184,7 +187,18 @@ func Run(ctx context.Context, c config.Config, o Options) error {
 		}
 	}
 
-	args := []string{"maintenance:install", "--data-dir=" + c.DataDir(), "--admin-user=" + o.AdminUser, "--admin-pass=" + o.AdminPass, "--database=" + c.Database.Type}
+	if o.AdminPass == "" {
+		if !o.GenerateAdminPass {
+			return fmt.Errorf("no admin password given")
+		}
+		if o.AdminPass, err = writeAdminPassword(c, o.Log); err != nil {
+			return err
+		}
+	}
+	// maintenance:install only takes the password as an argument, which any
+	// local user can read from the process list. Install with a throwaway one,
+	// then set the real password from the environment (--password-from-env).
+	args := []string{"maintenance:install", "--data-dir=" + c.DataDir(), "--admin-user=" + o.AdminUser, "--admin-pass=" + randomPassword(), "--database=" + c.Database.Type}
 	if c.Database.Type != "sqlite" {
 		args = append(args, "--database-name="+c.Database.Name, "--database-host="+c.Database.Host+":"+strconv.Itoa(c.Database.Port),
 			"--database-user="+c.Database.User, "--database-pass="+c.Database.Password)
@@ -206,6 +220,15 @@ func Run(ctx context.Context, c config.Config, o Options) error {
 		if code := nc.Occ(ctx, c, r, "setup", o.Log, step...); code != 0 {
 			return fmt.Errorf("occ %s failed with exit code %d", shown, code)
 		}
+		if shown == "maintenance:install" {
+			logf("occ user:resetpassword (from environment)")
+			os.Setenv("OC_PASS", o.AdminPass) // inherited by the occ child only for this step
+			code := nc.Occ(ctx, c, r, "setup", o.Log, "user:resetpassword", "--password-from-env", o.AdminUser)
+			os.Unsetenv("OC_PASS")
+			if code != 0 {
+				return fmt.Errorf("setting the admin password failed with exit code %d", code)
+			}
+		}
 	}
 	logf("setup complete: %s", CLIURL(c))
 	return nil
@@ -222,4 +245,22 @@ func grant(dir, account, rights string, w io.Writer) error {
 		return fmt.Errorf("icacls %s: %w", dir, err)
 	}
 	return nil
+}
+
+// writeAdminPassword generates the initial admin password and stores it where
+// only Administrators and SYSTEM can read it.
+func writeAdminPassword(c config.Config, w io.Writer) (string, error) {
+	pass := randomPassword()
+	path := filepath.Join(c.Paths.StateDir, "initial-admin-password.txt")
+	if err := os.WriteFile(path, []byte(pass+"\r\n"), 0o600); err != nil {
+		return "", err
+	}
+	cmd := exec.Command("icacls", path, "/inheritance:r", "/grant:r", "*S-1-5-32-544:F", "*S-1-5-18:F")
+	cmd.Stdout, cmd.Stderr = w, w
+	if err := cmd.Run(); err != nil {
+		os.Remove(path)
+		return "", fmt.Errorf("restricting %s: %w", path, err)
+	}
+	fmt.Fprintf(w, "initial admin password written to %s (Administrators only); change it after first login\n", path)
+	return pass, nil
 }

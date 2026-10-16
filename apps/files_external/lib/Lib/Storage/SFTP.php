@@ -547,7 +547,7 @@ class SFTP extends Common {
 
 		$stat['etag'] = $this->getETag($path);
 		$stat['storage_mtime'] = $stat['mtime'];
-		$stat['name'] = basename($path);
+		$stat['name'] = \OC\Files\Utils\PathHelper::basename($path);
 
 		$keys = ['size', 'mtime', 'mimetype', 'etag', 'storage_mtime', 'permissions', 'name'];
 		return array_intersect_key($stat, array_flip($keys));
