@@ -501,8 +501,10 @@ class Storage {
 
 		$pathinfo = pathinfo($filename);
 		$versionedFile = $pathinfo['basename'];
+		// Captured here: $filename is reassigned inside the loop below.
+		$fileDir = \OC\Files\Utils\PathHelper::dirname($filename);
 
-		$dir = Filesystem::normalizePath(self::VERSIONS_ROOT . '/' . \OC\Files\Utils\PathHelper::dirname($filename));
+		$dir = Filesystem::normalizePath(self::VERSIONS_ROOT . '/' . $fileDir);
 
 		$dirContent = false;
 		if ($view->is_dir($dir)) {
@@ -543,7 +545,7 @@ class Storage {
 							$versions[$key]['preview'] = $urlGenerator->linkToRoute('files_version.Preview.getPreview',
 								['file' => $userFullPath, 'version' => $timestamp]);
 						}
-						$versions[$key]['path'] = Filesystem::normalizePath(\OC\Files\Utils\PathHelper::dirname($filename) . '/' . $filename);
+						$versions[$key]['path'] = Filesystem::normalizePath($fileDir . '/' . $filename);
 						$versions[$key]['name'] = $versionedFile;
 						$versions[$key]['size'] = $view->filesize($dir . '/' . $entryName);
 						$versions[$key]['mimetype'] = Server::get(IMimeTypeDetector::class)->detectPath($versionedFile);

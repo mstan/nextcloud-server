@@ -24,6 +24,14 @@ class StorageObjectStore implements IObjectStore {
 	 * @return string the container or bucket name where objects are stored
 	 * @since 7.0.0
 	 */
+	/**
+	 * URNs ("urn:oid:42") contain ':', which on NTFS names an alternate data
+	 * stream rather than being part of a file name. Map it on Windows only.
+	 */
+	private function path(string $urn): string {
+		return DIRECTORY_SEPARATOR === '\\' ? str_replace(':', '-', $urn) : $urn;
+	}
+
 	#[\Override]
 	public function getStorageId(): string {
 		return $this->storage->getId();
@@ -37,7 +45,7 @@ class StorageObjectStore implements IObjectStore {
 	 */
 	#[\Override]
 	public function readObject($urn) {
-		$handle = $this->storage->fopen($urn, 'r');
+		$handle = $this->storage->fopen($this->path($urn), 'r');
 		if (is_resource($handle)) {
 			return $handle;
 		}
@@ -47,7 +55,7 @@ class StorageObjectStore implements IObjectStore {
 
 	#[\Override]
 	public function writeObject($urn, $stream, ?string $mimetype = null) {
-		$handle = $this->storage->fopen($urn, 'w');
+		$handle = $this->storage->fopen($this->path($urn), 'w');
 		if ($handle) {
 			stream_copy_to_stream($stream, $handle);
 			fclose($handle);
@@ -64,17 +72,17 @@ class StorageObjectStore implements IObjectStore {
 	 */
 	#[\Override]
 	public function deleteObject($urn) {
-		$this->storage->unlink($urn);
+		$this->storage->unlink($this->path($urn));
 	}
 
 	#[\Override]
 	public function objectExists($urn) {
-		return $this->storage->file_exists($urn);
+		return $this->storage->file_exists($this->path($urn));
 	}
 
 	#[\Override]
 	public function copyObject($from, $to) {
-		$this->storage->copy($from, $to);
+		$this->storage->copy($this->path($from), $this->path($to));
 	}
 
 	#[\Override]
