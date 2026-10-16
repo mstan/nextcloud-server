@@ -1,0 +1,8 @@
+# LF everywhere under windows/: Windows CI runners check out with
+# core.autocrlf=true, which breaks shell scripts and the rendered templates.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.wxs text eol=crlf
+*.zip binary
+*.png binary
+*.exe binary

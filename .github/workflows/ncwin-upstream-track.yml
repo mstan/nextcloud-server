@@ -15,6 +15,7 @@ on:
 permissions:
   contents: write
   issues: write
+  actions: write
 
 jobs:
   track:
@@ -27,6 +28,14 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
+      - name: Keep upstream's own workflows disabled
+        # They register lazily from the default branch; only ncwin-* should run on this fork.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows" \
+            --jq '.workflows[] | select(.state == "active") | select(.path | test("ncwin-") | not) | .id' |
+            while read -r id; do gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$id/disable"; echo "disabled $id"; done
       - name: Detect new upstream release
         id: detect
         run: |
