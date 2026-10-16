@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -322,11 +323,22 @@ func TestVersionRestore(t *testing.T) {
 	}
 	versions := e.url("/remote.php/dav/versions/" + e.user + "/versions/" + string(m[1]))
 	_, b = e.raw(t, "PROPFIND", versions, nil, map[string]string{"Depth": "1"})
-	hrefs := hrefRe.FindAllStringSubmatch(string(b), -1)
-	if len(hrefs) < 2 {
+	// The listing holds the current version too, in no particular order (the
+	// versions table is read without ORDER BY); version names are timestamps.
+	oldest, oldestTS := "", int64(0)
+	for _, h := range hrefRe.FindAllStringSubmatch(string(b), -1) {
+		var ts int64
+		if strings.HasSuffix(h[1], "/") { // the collection itself
+			continue
+		}
+		if _, err := fmt.Sscan(path.Base(h[1]), &ts); err == nil && (oldest == "" || ts < oldestTS) {
+			oldest, oldestTS = h[1], ts
+		}
+	}
+	if oldest == "" {
 		t.Fatalf("no versions listed: %.300s", b)
 	}
-	if s, b := e.raw(t, "MOVE", e.url(hrefs[1][1]), nil, map[string]string{"Destination": e.url("/remote.php/dav/versions/" + e.user + "/restore/target")}); s != 201 && s != 204 {
+	if s, b := e.raw(t, "MOVE", e.url(oldest), nil, map[string]string{"Destination": e.url("/remote.php/dav/versions/" + e.user + "/restore/target")}); s != 201 && s != 204 {
 		t.Fatalf("restore = %d: %.300s", s, b)
 	}
 	if b := e.expect(t, 200, "GET", d+"/v.txt", nil, nil); string(b) != "one" {
