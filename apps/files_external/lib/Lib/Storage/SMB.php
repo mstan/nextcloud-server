@@ -474,7 +474,7 @@ class SMB extends Common implements INotifyStorage {
 						}
 						$tmpFile = $this->getCachedFile($path);
 					} else {
-						if (!$this->isCreatable(dirname($path))) {
+						if (!$this->isCreatable(\OC\Files\Utils\PathHelper::dirname($path))) {
 							$this->logger->warning('Failed to open ' . $path . ' on ' . $this->getId() . ', parent directory not writable.');
 							return false;
 						}
@@ -656,7 +656,7 @@ class SMB extends Common implements INotifyStorage {
 			// Case sensitive filesystem doesn't matter for root directory
 			if ($this->caseSensitive === false && $path !== '') {
 				$filename = basename($path);
-				$siblings = $this->getDirectoryContent(dirname($path));
+				$siblings = $this->getDirectoryContent(\OC\Files\Utils\PathHelper::dirname($path));
 				foreach ($siblings as $sibling) {
 					if ($sibling['name'] === $filename) {
 						return true;

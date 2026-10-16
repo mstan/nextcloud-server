@@ -1,0 +1,24 @@
+# Reviewed Windows-lint exceptions (see lint_windows.py). kind<TAB>path<TAB>line
+dirname	apps/user_ldap/lib/LDAP.php	if ($this->logFile !== '' && is_writable(dirname($this->logFile)) && (!file_exists($this->logFile) || is_writable($this->logFile))) {
+dirname	core/Command/Db/Migrations/GenerateCommand.php	$this->ensureMigrationDirExists(dirname($directory));
+dirname	lib/private/DB/Connection.php	if ($logFile !== '' && is_writable(dirname($logFile)) && (!file_exists($logFile) || is_writable($logFile))) {
+dirname	lib/private/Files/Storage/Local.php	$parent = dirname($stat['full_path']);
+dirname	lib/private/Files/Storage/Local.php	$parentPath = dirname($fullPath);
+dirname	lib/private/Files/Storage/Local.php	$sourcePath = dirname($sourcePath);
+dirname	lib/private/Files/Utils/PathHelper.php	$dir = dirname($path, $levels);
+dirname	lib/private/Image.php	$isWritable = is_writable(dirname($filePath));
+dirname	lib/private/Image.php	$this->logger->error(__METHOD__ . '(): Directory \'' . dirname($filePath) . '\' is not writable.', ['app' => 'core']);
+dirname	lib/private/Image.php	if (!file_exists(dirname($filePath))) {
+dirname	lib/private/Image.php	mkdir(dirname($filePath), 0777, true);
+dirname	lib/private/Log/File.php	!is_writable(dirname($this->logFile))
+dirname	lib/private/Memcache/Factory.php	if ($this->logFile !== '' && is_writable(dirname($this->logFile)) && (!file_exists($this->logFile) || is_writable($this->logFile))) {
+dirname	lib/private/Preview/Storage/LocalPreviewStorage.php	$dirname = dirname($path);
+dirname	lib/private/TempManager.php	return dirname($temp);
+dirname	lib/private/Template/JSResourceLocator.php	$appRoot = dirname($this->appManager->getAppPath($app));
+dirname	lib/private/Template/JSResourceLocator.php	$appWebRoot = dirname($this->appManager->getAppWebPath($app));
+dirname	lib/private/Template/ResourceLocator.php	$parent = PathHelper::normalizeOsPath(dirname($tmpRoot));
+posix	apps/settings/lib/SetupChecks/AppDirsWithDifferentOwner.php	$currentUser = posix_getuid();
+posix	apps/settings/lib/SetupChecks/AppDirsWithDifferentOwner.php	$currentUserInfos = posix_getpwuid($currentUser) ?: [];
+posix	occ	$ownerInfo = posix_getpwuid($targetUid);
+posix	occ	posix_setgid($targetGid);
+posix	occ	posix_setuid($targetUid);

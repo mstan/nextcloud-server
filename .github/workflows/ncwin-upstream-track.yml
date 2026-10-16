@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Daily: follow upstream point releases of the major this fork currently
+# tracks (windows/build/deps.lock.json). On a new vNN.x.y tag:
+#   rebase win/NN onto it, pin the new release zip, run ncwin CI, tag
+#   vNN.x.y-win.1 and publish a GitHub release with the assembled build.
+# A conflicting rebase opens an issue instead. A new major opens an issue:
+# moving majors (app max-version, deps) is a reviewed step (UPSTREAM.md).
+name: ncwin upstream tracking
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.detect.outputs.new_tag }}
+      branch: ${{ steps.detect.outputs.branch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - name: Detect new upstream release
+        id: detect
+        run: |
+          git fetch --no-tags https://github.com/nextcloud/server.git "+refs/tags/v*:refs/tags/v*"
+          cur=$(jq -r .nextcloud.version windows/build/deps.lock.json)
+          major=${cur%%.*}
+          echo "branch=win/$major" >> "$GITHUB_OUTPUT"
+          latest=$(git tag -l "v$major.*" | grep -E "^v$major\.[0-9]+\.[0-9]+$" | sort -V | tail -1)
+          next=$(git tag -l "v$((major+1)).0.0")
+          if [ -n "$next" ] && ! gh issue list --state open --search "in:title ncwin: Nextcloud $((major+1)) released" --json number --jq '.[0].number' | grep -q .; then
+            gh issue create --title "ncwin: Nextcloud $((major+1)) released" --body "Upstream tagged v$((major+1)).0.0. Follow windows/UPSTREAM.md \"New major\" to create win/$((major+1))."
+          fi
+          if [ "$latest" = "v$cur" ]; then echo "up to date at v$cur"; exit 0; fi
+          echo "new_tag=$latest" >> "$GITHUB_OUTPUT"
+          echo "new upstream release: $latest (fork is on v$cur)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Rebase win branch onto new release
+        if: steps.detect.outputs.new_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW: ${{ steps.detect.outputs.new_tag }}
+          BRANCH: ${{ steps.detect.outputs.branch }}
+        run: |
+          git config user.name "ncwin-bot"
+          git config user.email "ncwin-bot@users.noreply.github.com"
+          git switch "$BRANCH"
+          old="v$(jq -r .nextcloud.version windows/build/deps.lock.json)"
+          if ! git rebase --onto "$NEW" "$old" "$BRANCH"; then
+            git rebase --abort
+            gh issue create --title "ncwin: rebase onto $NEW conflicts" \
+              --body "Automatic \`git rebase --onto $NEW $old $BRANCH\` hit conflicts. Resolve locally (windows/UPSTREAM.md) and push."
+            exit 1
+          fi
+          ver=${NEW#v}
+          url="https://download.nextcloud.com/server/releases/nextcloud-$ver.zip"
+          sha=$(curl -fsSL "$url.sha256" | cut -d' ' -f1)
+          test ${#sha} -eq 64
+          jq --arg v "$ver" --arg u "$url" --arg s "$sha" '.nextcloud = {version: $v, url: $u, sha256: $s}' \
+            windows/build/deps.lock.json > deps.tmp && mv deps.tmp windows/build/deps.lock.json
+          git commit -am "win: track Nextcloud $ver"
+          git push --force-with-lease origin "$BRANCH"
+
+  ci:
+    needs: track
+    if: needs.track.outputs.new_tag != ''
+    uses: ./.github/workflows/ncwin-ci.yml
+    secrets: inherit
+
+  release:
+    needs: [track, ci]
+    if: needs.track.outputs.new_tag != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ncwin
+          path: ncwin
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW: ${{ needs.track.outputs.new_tag }}
+          BRANCH: ${{ needs.track.outputs.branch }}
+        run: |
+          tag="$NEW-win.1"
+          (cd ncwin && zip -qr "../ncwin-${tag#v}.zip" .)
+          sha256sum "ncwin-${tag#v}.zip" > "ncwin-${tag#v}.zip.sha256"
+          gh release create "$tag" "ncwin-${tag#v}.zip" "ncwin-${tag#v}.zip.sha256" \
+            --repo "$GITHUB_REPOSITORY" --target "$BRANCH" \
+            --title "ncwin ${tag#v}" --notes "Nextcloud ${NEW#v} for Windows (automatic build from $BRANCH)."

@@ -140,7 +140,7 @@ class Swift extends Common {
 		$bucketUrl = new Uri($parameters['bucket']);
 		if ($bucketUrl->getHost()) {
 			$parameters['bucket'] = basename($bucketUrl->getPath());
-			$parameters['endpoint_url'] = (string)$bucketUrl->withPath(dirname($bucketUrl->getPath()));
+			$parameters['endpoint_url'] = (string)$bucketUrl->withPath(\OC\Files\Utils\PathHelper::dirname($bucketUrl->getPath()));
 		}
 
 		if (empty($parameters['url'])) {

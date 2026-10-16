@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Weekly: replay the Windows commits onto upstream master (the next major) so
+# conflicts and new Windows-hostile code surface months before a release.
+name: ncwin master canary
+
+on:
+  schedule:
+    - cron: '41 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - name: Rebase onto upstream master
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "ncwin-bot"
+          git config user.email "ncwin-bot@users.noreply.github.com"
+          git fetch --no-tags https://github.com/nextcloud/server.git "+refs/tags/v*:refs/tags/v*" "+refs/heads/master:refs/remotes/upstream/master"
+          base="v$(jq -r .nextcloud.version windows/build/deps.lock.json)"
+          git switch -C win/canary
+          if ! git rebase --onto upstream/master "$base" win/canary; then
+            files=$(git diff --name-only --diff-filter=U | sed 's/^/- /')
+            git rebase --abort
+            title="ncwin canary: Windows commits conflict with upstream master"
+            body=$(printf 'Week of %s. Conflicting files:\n%s\n\nResolve before the next major (windows/UPSTREAM.md).' "$(date -u +%F)" "$files")
+            num=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+            if [ -n "$num" ]; then gh issue comment "$num" --body "$body"; else gh issue create --title "$title" --body "$body"; fi
+            exit 1
+          fi
+          git push --force origin win/canary
+      - name: Flag new Windows-hostile patterns in master
+        # Lints the rebased work tree: new upstream code must be routed or reviewed.
+        run: python3 windows/build/lint_windows.py

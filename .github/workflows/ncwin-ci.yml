@@ -1,0 +1,141 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# ncwin (native Windows build) CI. Upstream's own workflows are disabled on
+# this fork with `gh workflow disable`; only ncwin-* workflows run here.
+name: ncwin CI
+
+on:
+  push:
+    branches: ['win/**']
+  pull_request:
+    branches: ['win/**']
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  supervisor:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: windows/supervisor/go.mod
+      - name: go vet + test (supervisor)
+        working-directory: windows/supervisor
+        run: |
+          go vet ./...
+          go test ./... -count=1
+      - name: go vet (integration tests)
+        working-directory: windows/tests
+        run: go vet ./...
+
+  windows-lint:
+    # Every bare dirname()/unguarded posix_*() must be routed or explicitly reviewed.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 windows/build/lint_windows.py
+
+  php-lint:
+    # Every PHP file the fork touches must parse on the PHP version we ship.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch upstream tags
+        run: git fetch --no-tags https://github.com/nextcloud/server.git "+refs/tags/*:refs/tags/*"
+      - name: Lint patched PHP files
+        shell: pwsh
+        run: |
+          $lock = Get-Content windows/build/deps.lock.json -Raw | ConvertFrom-Json
+          Invoke-WebRequest $lock.frankenphp.url -OutFile fp.zip
+          if ((Get-FileHash fp.zip -Algorithm SHA256).Hash -ne $lock.frankenphp.sha256.ToUpper()) { throw 'frankenphp hash mismatch' }
+          & "$env:SystemRoot\System32\tar.exe" -xf fp.zip -C $env:RUNNER_TEMP
+          $php = Join-Path $env:RUNNER_TEMP 'php.exe'
+          $files = git diff --name-only --diff-filter=AM "v$($lock.nextcloud.version)" HEAD -- '*.php' 'occ'
+          $files += Get-ChildItem windows/app -Recurse -Filter *.php | ForEach-Object { $_.FullName }
+          $bad = 0
+          foreach ($f in $files) { & $php -n -l $f | Out-Null; if ($LASTEXITCODE -ne 0) { & $php -n -l $f; $bad++ } }
+          if ($bad) { throw "$bad file(s) fail php -l" }
+          "linted $($files.Count) files"
+
+  assemble:
+    runs-on: windows-latest
+    needs: [supervisor, php-lint, windows-lint]
+    env:
+      # `secrets` is not available in step conditions; expose presence via env.
+      HAS_SIGNING_KEYS: ${{ secrets.NCWIN_SIGNING_KEYS != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: windows/supervisor/go.mod
+      - name: Fetch upstream tags
+        run: git fetch --no-tags https://github.com/nextcloud/server.git "+refs/tags/*:refs/tags/*"
+      - name: Restore signing keys
+        if: env.HAS_SIGNING_KEYS == 'true'
+        shell: pwsh
+        env:
+          NCWIN_SIGNING_KEYS: ${{ secrets.NCWIN_SIGNING_KEYS }}
+        run: |
+          # Base64 of a zip holding core.key/.crt and windows_integration.key/.crt.
+          $dir = Join-Path $env:RUNNER_TEMP 'signing'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          [IO.File]::WriteAllBytes("$dir.zip", [Convert]::FromBase64String($env:NCWIN_SIGNING_KEYS))
+          & "$env:SystemRoot\System32\tar.exe" -xf "$dir.zip" -C $dir
+          Remove-Item "$dir.zip"
+          "NCWIN_SIGNING_DIR=$dir" | Out-File -Append $env:GITHUB_ENV
+      - name: Assemble
+        shell: pwsh
+        run: |
+          $a = @{ WorkDir = (Join-Path $env:RUNNER_TEMP 'build'); WithMariaDB = $true; WithPostgres = $true }
+          if ($env:NCWIN_SIGNING_DIR) { $a.SigningDir = $env:NCWIN_SIGNING_DIR } else { $a.NoSign = $true }
+          ./windows/build/assemble.ps1 @a
+      - name: Smoke test (SQLite, foreground)
+        shell: pwsh
+        run: |
+          $b = Join-Path $env:RUNNER_TEMP 'build'
+          $exe = Join-Path $b 'out\ncwin\ncwin.exe'
+          @"
+          [paths]
+          install_dir = '$b\out\ncwin'
+          state_dir   = '$b\state'
+          data_dir    = '$b\data'
+          [web]
+          http_port  = 18080
+          https_port = 18443
+          [[web.site]]
+          addresses = ["https://localhost:18443"]
+          tls = "internal"
+          [database]
+          type = "sqlite"
+          "@ | Set-Content -Encoding UTF8 "$b\ncwin.toml"
+          $env:NCWIN_ADMIN_PASS = 'Ci-Admin-Pass-1'
+          & $exe setup --config "$b\ncwin.toml" --no-acl
+          if ($LASTEXITCODE) { throw 'setup failed' }
+          $p = Start-Process $exe -ArgumentList @('run', '--config', "$b\ncwin.toml") -PassThru -NoNewWindow
+          $deadline = (Get-Date).AddMinutes(10)
+          while (-not ((& $exe events --kind proc.ready) -match ' web ')) {
+            if ((Get-Date) -gt $deadline) { throw 'web never became ready' }
+            Start-Sleep 2
+          }
+          Push-Location windows/tests
+          $env:NCWIN_URL = 'https://localhost:18443'; $env:NCWIN_USER = 'admin'; $env:NCWIN_PASS = 'Ci-Admin-Pass-1'; $env:NCWIN_DATA = "$b\data"
+          go test ./... -count=1 -v -timeout 40m
+          $code = $LASTEXITCODE
+          Pop-Location
+          & $exe occ integrity:check-core
+          & $exe occ windows:selftest
+          & $exe shutdown
+          $p.WaitForExit(900000) | Out-Null
+          if ($code) { throw 'integration tests failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ncwin
+          path: ${{ runner.temp }}/build/out/ncwin
+          retention-days: 7

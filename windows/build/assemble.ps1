@@ -26,7 +26,12 @@ param(
     [string]$PatchRef = 'HEAD',
     [switch]$WithMariaDB,
     [switch]$WithPostgres,
-    [switch]$Clean
+    [switch]$Clean,
+    # Directory holding core.key/.crt and windows_integration.key/.crt, issued by
+    # resources/codesigning/downstream-root.crt. CI passes these from secrets.
+    [string]$SigningDir,
+    # Developer builds only: keep upstream's signature (the integrity check will flag patched files).
+    [switch]$NoSign
 )
 
 $ErrorActionPreference = 'Stop'
@@ -111,6 +116,43 @@ foreach ($ext in $lock.pecl.PSObject.Properties) {
     # Dependency DLLs (e.g. ImageMagick CORE_RL_*.dll) must sit beside php.exe.
     Get-ChildItem $tmp -Filter *.dll | Where-Object { $_.Name -notlike 'php_*' } | Copy-Item -Destination (Join-Path $stage 'php')
     Remove-Item -Recurse -Force $tmp
+}
+
+# 2b. Re-sign the patched core and windows_integration with the downstream key,
+# so Nextcloud's code-integrity check keeps working (see Checker::loadDownstreamCertificate).
+if ($NoSign) {
+    Write-Warning 'skipping code signing (-NoSign): the integrity check will report modified core files'
+} else {
+    if (-not $SigningDir) { $SigningDir = Join-Path $WorkDir 'signing' }
+    foreach ($f in 'core.key', 'core.crt', 'windows_integration.key', 'windows_integration.crt') {
+        if (-not (Test-Path (Join-Path $SigningDir $f))) { throw "missing $f in $SigningDir (or pass -NoSign for a developer build)" }
+    }
+    $signTmp = Join-Path $WorkDir 'sign-tmp'
+    if (Test-Path $signTmp) { Remove-Item -Recurse -Force $signTmp }
+    New-Item -ItemType Directory -Force (Join-Path $signTmp 'config') | Out-Null
+    $ext = (Join-Path $stage 'php\ext') -replace '\\', '/'
+    Set-Content -Encoding ASCII -Path (Join-Path $signTmp 'php.ini') -Value @(
+        '[PHP]', "extension_dir = `"$ext`"", 'memory_limit = 1G',
+        'extension = openssl', 'extension = mbstring', 'extension = intl', 'extension = fileinfo',
+        'extension = gd', 'extension = zip', 'extension = curl', 'extension = sodium', 'extension = pdo_sqlite')
+    $env:PHPRC = $signTmp
+    $env:NEXTCLOUD_CONFIG_DIR = (Join-Path $signTmp 'config') + '\'
+    $env:OPENSSL_CONF = Join-Path $stage 'php\extras\ssl\openssl.cnf'
+    $php = Join-Path $stage 'php\php.exe'
+    $nc = Join-Path $stage 'nextcloud'
+    Push-Location $nc
+    try {
+        Write-Host 'sign core'
+        & $php -f occ -- --no-warnings integrity:sign-core "--privateKey=$(Join-Path $SigningDir 'core.key')" "--certificate=$(Join-Path $SigningDir 'core.crt')" "--path=$nc"
+        if ($LASTEXITCODE -ne 0) { throw 'integrity:sign-core failed' }
+        Write-Host 'sign windows_integration'
+        & $php -f occ -- --no-warnings integrity:sign-app "--privateKey=$(Join-Path $SigningDir 'windows_integration.key')" "--certificate=$(Join-Path $SigningDir 'windows_integration.crt')" "--path=$(Join-Path $nc 'apps\windows_integration')"
+        if ($LASTEXITCODE -ne 0) { throw 'integrity:sign-app failed' }
+    } finally {
+        Pop-Location
+        Remove-Item Env:PHPRC, Env:NEXTCLOUD_CONFIG_DIR, Env:OPENSSL_CONF -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force $signTmp -ErrorAction SilentlyContinue
+    }
 }
 
 # 3. Optional bundled databases.
