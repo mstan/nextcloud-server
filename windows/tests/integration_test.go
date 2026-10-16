@@ -396,3 +396,29 @@ func TestExternalLocalMount(t *testing.T) {
 		t.Fatalf("GET = %q", b)
 	}
 }
+
+// Deleting a folder and immediately recreating it (what litmus does between
+// suites) must never find a stale entry: the watcher scanning in reaction to
+// Nextcloud's own writes must not resurrect what Nextcloud just deleted.
+func TestDeleteThenRecreate(t *testing.T) {
+	e := setup(t)
+	d := e.folder(t)
+	n := 15
+	if s := os.Getenv("NCWIN_RECREATE_ROUNDS"); s != "" {
+		fmt.Sscan(s, &n)
+	}
+	for i := 0; i < n; i++ {
+		e.expect(t, 201, "MKCOL", d+"/again", nil, nil)
+		for j := 0; j < 30; j++ {
+			e.expect(t, 201, "PUT", fmt.Sprintf("%s/again/f%d.txt", d, j), strings.NewReader(strings.Repeat("x", 4096)), nil)
+		}
+		// Vary the gap so the watcher's debounce (2s) and antivirus scans of the
+		// fresh files land at different points relative to the DELETE.
+		time.Sleep(time.Duration(i%5) * 500 * time.Millisecond)
+		e.expect(t, 204, "DELETE", d+"/again", nil, nil)
+		if got, b := e.do(t, "MKCOL", d+"/again", nil, nil); got != 201 {
+			t.Fatalf("round %d: MKCOL right after DELETE = %d (stale entry): %.200s", i, got, b)
+		}
+		e.expect(t, 204, "DELETE", d+"/again", nil, nil)
+	}
+}
