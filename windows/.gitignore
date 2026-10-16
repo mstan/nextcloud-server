@@ -1,0 +1,2 @@
+# Build outputs live outside the repo (see build/assemble.ps1 -WorkDir); nothing generated belongs here.
+*.exe
