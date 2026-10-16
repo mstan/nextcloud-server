@@ -68,6 +68,8 @@ func main() {
 		err = renderOnly(configFlag(cmd, args))
 	case "status":
 		err = status()
+	case "shutdown":
+		err = ipc.Call("shutdown", nil, nil, nil)
 	case "events":
 		err = events(args)
 	case "occ":
@@ -93,7 +95,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ncwin setup|ca|install|uninstall|start|stop|status|events|occ|grant-path|run|render|version [args]")
+	fmt.Fprintln(os.Stderr, "usage: ncwin setup|ca|shutdown|install|uninstall|start|stop|status|events|occ|grant-path|run|render|version [args]")
 	os.Exit(2)
 }
 
