@@ -296,7 +296,7 @@ class JSConfigHelper {
 
 		// Echo it
 		foreach ($array as $setting => $value) {
-			$result .= 'var ' . $setting . '=' . $value . ';' . PHP_EOL;
+			$result .= 'var ' . $setting . '=' . $value . ';' . "\n"; // not PHP_EOL: same output on every platform
 		}
 
 		return $result;

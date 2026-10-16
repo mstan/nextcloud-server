@@ -112,7 +112,7 @@ class JSCombiner {
 
 			if (is_file($filePath)) {
 				$res .= file_get_contents($filePath);
-				$res .= PHP_EOL . PHP_EOL;
+				$res .= "\n\n"; // not PHP_EOL: identical output on every platform
 				$deps[$filePath] = filemtime($filePath);
 			}
 		}
