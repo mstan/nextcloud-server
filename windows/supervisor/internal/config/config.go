@@ -79,6 +79,9 @@ type Watcher struct {
 
 type Ring struct {
 	Capacity int `toml:"capacity"`
+	// JournalMB caps each of the two generations of log/events.jsonl, the
+	// ring's on-disk copy (0 keeps events in memory only).
+	JournalMB int `toml:"journal_mb"`
 }
 
 // Duration is a time.Duration that unmarshals from TOML strings like "5m".
@@ -112,7 +115,7 @@ func Default() Config {
 		Database: Database{Type: "sqlite"},
 		Cron:     Cron{Interval: Duration{5 * time.Minute}},
 		Watcher:  Watcher{Enabled: true, Debounce: Duration{2 * time.Second}, NightlyScan: "03:30"},
-		Ring:     Ring{Capacity: 65536},
+		Ring:     Ring{Capacity: 65536, JournalMB: 64},
 		Update:   Update{Repo: "mstan/nextcloud-server", Auto: true},
 	}
 }
@@ -194,6 +197,9 @@ func (c *Config) Validate() error {
 	if c.Ring.Capacity < 1024 {
 		add("ring.capacity must be at least 1024")
 	}
+	if c.Ring.JournalMB < 0 {
+		add("ring.journal_mb must not be negative")
+	}
 	if len(errs) > 0 {
 		return fmt.Errorf("invalid config:\n  %s", strings.Join(errs, "\n  "))
 	}
@@ -245,6 +251,11 @@ func (c Config) TempDir() string       { return slash(filepath.Join(c.Paths.Stat
 func (c Config) CaddyDataDir() string  { return slash(filepath.Join(c.Paths.StateDir, "caddy")) }
 func (c Config) DBDir() string         { return slash(filepath.Join(c.Paths.StateDir, "db")) }
 func (c Config) DataDir() string       { return slash(c.Paths.DataDir) }
+
+// JournalPath is the ring's on-disk copy (see ring.Journal).
+func (c Config) JournalPath() string {
+	return filepath.Join(filepath.FromSlash(c.LogDir()), "events.jsonl")
+}
 
 // EnsureStateDirs creates every directory ncwin writes to.
 func (c Config) EnsureStateDirs() error {

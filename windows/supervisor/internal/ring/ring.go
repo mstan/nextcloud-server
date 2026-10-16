@@ -27,6 +27,8 @@ type Buffer struct {
 	buf  []Event
 	next uint64 // Seq of the next event to append; events [next-len, next) are held
 	n    int    // number of valid events (<= cap)
+
+	journal *Journal // optional on-disk copy (see NewJournaled)
 }
 
 func New(capacity int) *Buffer {
@@ -38,10 +40,14 @@ func (b *Buffer) Add(kind, source, msg string, fields map[string]string) uint64 
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	seq := b.next
-	b.buf[int(seq%uint64(len(b.buf)))] = Event{Seq: seq, Time: time.Now(), Kind: kind, Source: source, Msg: msg, Fields: fields}
+	e := Event{Seq: seq, Time: time.Now(), Kind: kind, Source: source, Msg: msg, Fields: fields}
+	b.buf[int(seq%uint64(len(b.buf)))] = e
 	b.next++
 	if b.n < len(b.buf) {
 		b.n++
+	}
+	if b.journal != nil {
+		b.journal.write(e) // under b.mu, so the journal keeps Seq order
 	}
 	return seq
 }

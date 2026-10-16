@@ -175,6 +175,8 @@ func events(args []string) error {
 	from := fs.Uint64("from", 0, "first sequence number")
 	limit := fs.Int("limit", 0, "maximum events")
 	asJSON := fs.Bool("json", false, "print JSON lines")
+	fromJournal := fs.Bool("journal", false, "read the on-disk journal (all history kept) instead of the running service")
+	cfgPath := fs.String("config", defaultConfig, "path to ncwin.toml (for the journal)")
 	_ = fs.Parse(args)
 	q := ring.Query{FromSeq: *from, Limit: *limit}
 	if *since > 0 {
@@ -184,8 +186,22 @@ func events(args []string) error {
 		q.Kinds = strings.Split(*kind, ",")
 	}
 	var evs []ring.Event
-	if err := ipc.Call("events", q, nil, &evs); err != nil {
-		return err
+	err := errors.New("journal requested")
+	if !*fromJournal {
+		err = ipc.Call("events", q, nil, &evs)
+	}
+	if err != nil {
+		// The journal holds the same events, across restarts and crashes.
+		c, cerr := config.Load(*cfgPath)
+		if cerr != nil {
+			return fmt.Errorf("%v; and no journal: %v", err, cerr)
+		}
+		if !*fromJournal {
+			fmt.Fprintf(os.Stderr, "(%v; reading %s)\n", err, c.JournalPath())
+		}
+		if evs, err = ring.Search(c.JournalPath(), q); err != nil {
+			return err
+		}
 	}
 	for _, e := range evs {
 		if *asJSON {
