@@ -195,6 +195,25 @@ class LocalTest extends Storage {
 		$this->assertSame(0077, $leaked, 'umask has to be restored when the write path throws');
 	}
 
+	/**
+	 * Deletes $stalePath, creates $directory and writes 'abc' to $file in another
+	 * process, so this process keeps its realpath cache. Returns the exit status.
+	 */
+	private function replaceFileWithDirectoryOutOfProcess(string $stalePath, string $directory, string $file): int {
+		if (DIRECTORY_SEPARATOR === '\\') {
+			// cmd.exe resolves mkdir to its own built-in, which has no -p.
+			$code = "@unlink(\$argv[1]); mkdir(\$argv[2], 0777, true); file_put_contents(\$argv[3], 'abc');";
+			$command = escapeshellarg(PHP_BINARY) . ' -r ' . escapeshellarg($code)
+				. ' ' . escapeshellarg($stalePath) . ' ' . escapeshellarg($directory) . ' ' . escapeshellarg($file);
+		} else {
+			$command = 'rm -f ' . escapeshellarg($stalePath)
+				. ' && mkdir -p ' . escapeshellarg($directory)
+				. ' && printf abc > ' . escapeshellarg($file);
+		}
+		exec($command, $output, $status);
+		return $status;
+	}
+
 	public function testFopenRecoveryLeavesEntriesOutsideTheDataDirectoryAlone(): void {
 		if (!function_exists('exec')) {
 			$this->markTestSkipped('exec() is required to change the path type out of process');
@@ -219,13 +238,7 @@ class LocalTest extends Storage {
 		$this->assertArrayHasKey(__DIR__, realpath_cache_get());
 		$this->assertArrayHasKey($dataDir, realpath_cache_get());
 
-		exec(
-			'rm -f ' . escapeshellarg($stalePath)
-			. ' && mkdir -p ' . escapeshellarg($stalePath)
-			. ' && printf abc > ' . escapeshellarg($file),
-			$output,
-			$status
-		);
+		$status = $this->replaceFileWithDirectoryOutOfProcess($stalePath, $stalePath, $file);
 		$this->assertSame(0, $status, 'failed to replace the file with a directory');
 
 		$handle = $this->instance->fopen('folder/a.txt', 'r');
@@ -269,13 +282,7 @@ class LocalTest extends Storage {
 			$this->markTestSkipped('the realpath cache of this setup does not hold the directory flag');
 		}
 
-		exec(
-			'rm -f ' . escapeshellarg($stalePath)
-			. ' && mkdir -p ' . escapeshellarg(dirname($file))
-			. ' && printf abc > ' . escapeshellarg($file),
-			$output,
-			$status
-		);
+		$status = $this->replaceFileWithDirectoryOutOfProcess($stalePath, dirname($file), $file);
 		$this->assertSame(0, $status, 'failed to replace the file with a directory');
 
 		$handle = $this->instance->fopen($filePath, 'r');

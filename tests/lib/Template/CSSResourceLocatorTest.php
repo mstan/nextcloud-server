@@ -108,6 +108,10 @@ class CSSResourceLocatorTest extends \Test\TestCase {
 		$file = $resource[2];
 
 		$expectedRoot = $new_apps_path . '/test_css_app';
+		if (DIRECTORY_SEPARATOR === '\\') {
+			// The temp dir may be spelled with 8.3 names and '\'; the locator returns the long, '/' form.
+			$expectedRoot = \OC\Files\Utils\PathHelper::normalizeOsPath(realpath($expectedRoot));
+		}
 		$expectedWebRoot = \OC::$WEBROOT . '/css-apps-test/test_css_app';
 		$expectedFile = 'test-file.css';
 

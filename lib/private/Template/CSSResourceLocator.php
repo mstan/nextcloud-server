@@ -53,7 +53,7 @@ class CSSResourceLocator extends ResourceLocator {
 		// Account for the possibility of having symlinks in app path. Doing
 		// this here instead of above as an empty argument to realpath gets
 		// turned into cwd.
-		$app_path = realpath($app_path);
+		$app_path = \OC\Files\Utils\PathHelper::realOsPath($app_path);
 		$app_path = $app_path === false ? false : \OC\Files\Utils\PathHelper::normalizeOsPath($app_path);
 
 		$this->append($app_path, join('/', array_slice($parts, 1)) . '.css', $app_url);

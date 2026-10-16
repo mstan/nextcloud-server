@@ -56,7 +56,7 @@ class Local extends Common {
 		if ($this->datadir === '/') {
 			$this->realDataDir = $this->datadir;
 		} else {
-			$realPath = PathHelper::normalizeOsPath(realpath($this->datadir) ?: $this->datadir);
+			$realPath = PathHelper::normalizeOsPath(PathHelper::realOsPathOrSelf($this->datadir));
 			$this->realDataDir = rtrim($realPath, '/') . '/';
 		}
 		if (!str_ends_with($this->datadir, '/')) {
@@ -541,6 +541,10 @@ class Local extends Common {
 		$path = $sourcePath;
 		while (str_starts_with($path, $root . '/')) {
 			clearstatcache(true, $path);
+			if (DIRECTORY_SEPARATOR === '\\') {
+				// The cache is keyed by the path as spelled by the caller.
+				clearstatcache(true, str_replace('/', '\\', $path));
+			}
 			$parent = \OC\Files\Utils\PathHelper::dirname($path);
 			if ($parent === $path) {
 				return;
@@ -553,7 +557,14 @@ class Local extends Common {
 	public function fopen(string $path, string $mode) {
 		$sourcePath = $this->getSourcePath($path);
 		if (!file_exists($sourcePath) && $mode === 'r') {
-			return false;
+			// On Windows file_exists() also resolves through the realpath cache.
+			if (DIRECTORY_SEPARATOR !== '\\') {
+				return false;
+			}
+			$this->clearRealpathCache($sourcePath);
+			if (!file_exists($sourcePath)) {
+				return false;
+			}
 		}
 		if ($mode !== 'r' && $mode !== 'rb') {
 			$this->assertNoCaseConflict($path);
@@ -668,14 +679,14 @@ class Local extends Common {
 			return $fullPath;
 		}
 		$pathToResolve = $fullPath;
-		$realPath = realpath($pathToResolve);
+		$realPath = PathHelper::realOsPath($pathToResolve);
 		while ($realPath === false) { // for non existing files check the parent directory
 			$currentPath = \OC\Files\Utils\PathHelper::dirname($currentPath);
 			/** @psalm-suppress TypeDoesNotContainType Let's be extra cautious and still check for empty string */
 			if ($currentPath === '' || $currentPath === '.') {
 				return $fullPath;
 			}
-			$realPath = realpath($this->datadir . $currentPath);
+			$realPath = PathHelper::realOsPath($this->datadir . $currentPath);
 		}
 		if ($realPath) {
 			$realPath = PathHelper::normalizeOsPath($realPath) . '/';

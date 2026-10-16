@@ -119,7 +119,7 @@ abstract class ResourceLocator {
 		}
 
 		if ($webRoot === null) {
-			$realpath = realpath($root);
+			$realpath = PathHelper::realOsPath($root);
 			$realpath = $realpath === false ? false : PathHelper::normalizeOsPath($realpath);
 
 			if ($realpath && ($realpath !== $root)) {

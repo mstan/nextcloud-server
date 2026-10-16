@@ -101,6 +101,52 @@ class PathHelper {
 	}
 
 	/**
+	 * realpath() that spells the result the same way for every route to a file.
+	 * On Windows realpath() keeps the spelling stored in a symlink or junction
+	 * target (8.3 short names such as 'RUNNER~1'), while a path without links
+	 * gets long names; resolving the result again settles on the long form.
+	 * Identical to realpath() on other platforms.
+	 */
+	public static function realOsPath(string $path): string|false {
+		$real = realpath($path);
+		if ($real !== false && DIRECTORY_SEPARATOR === '\\') {
+			return realpath($real);
+		}
+		return $real;
+	}
+
+	/**
+	 * realOsPath() for a path that may not exist yet: on Windows the nearest
+	 * existing ancestor is resolved and the missing tail appended, so the result
+	 * is spelled like realOsPath() of the path once it exists. Otherwise the
+	 * path itself is returned when it cannot be resolved.
+	 */
+	public static function realOsPathOrSelf(string $path): string {
+		$real = self::realOsPath($path);
+		if ($real !== false) {
+			return $real;
+		}
+		if (DIRECTORY_SEPARATOR !== '\\') {
+			return $path;
+		}
+		$tail = '';
+		$current = rtrim($path, '/\\');
+		while ($current !== '') {
+			$parent = dirname($current);
+			if ($parent === $current) {
+				break;
+			}
+			$tail = '/' . basename($current) . $tail;
+			$current = $parent;
+			$real = self::realOsPath($current);
+			if ($real !== false) {
+				return $real . $tail;
+			}
+		}
+		return $path;
+	}
+
+	/**
 	 * Whether an OS file-system path is absolute: '/...' everywhere, plus
 	 * drive ('C:/...', 'C:\...') and UNC ('\\server\share') paths on Windows.
 	 */
