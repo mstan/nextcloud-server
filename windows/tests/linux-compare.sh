@@ -22,6 +22,6 @@ docker run --rm -v ncwin-src:/src ncwin-linux-test sh -c "
 	php tests/enable_all.php >/dev/null
 	for t in $*; do
 		printf '%s: ' \"\$t\"
-		php -d memory_limit=4G vendor-bin/phpunit/vendor/bin/phpunit -c tests/phpunit-autotest.xml --no-coverage \"\$t\" 2>&1 | grep -E '^(OK|Tests:|FAILURES|ERRORS)' | tr '\n' ' '
+		php -d memory_limit=4G vendor-bin/phpunit/vendor/bin/phpunit -c tests/phpunit-autotest.xml --no-coverage \"\$t\" 2>&1 | grep -E '^(OK|Tests:|FAILURES|ERRORS)|^[0-9]+[)] [A-Z]' | tr '\n' ' '
 		echo
 	done"

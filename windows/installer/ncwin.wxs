@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: AGPL-3.0-or-later
+
+  ncwin MSI. Built by windows/build/build-msi.ps1 from an assembled install
+  tree (bind path "payload"). Installs program files only: configuration
+  (C:\ProgramData\ncwin) and user data are created by ncwin itself and are
+  never removed by uninstall or upgrades.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:fire="http://wixtoolset.org/schemas/v4/wxs/firewall">
+
+  <Package Name="Nextcloud for Windows (ncwin)" Manufacturer="ncwin" Language="1033"
+           Version="$(var.Version)" UpgradeCode="268f979b-b084-41e3-8af8-8ce9e726f7fb"
+           Scope="perMachine" Compressed="yes" InstallerVersion="500">
+
+    <!-- Remove the old product completely first: the service is stopped (clean
+         database shutdown), files replaced, service started again, and ncwin
+         runs `occ upgrade` before serving the new code. -->
+    <MajorUpgrade Schedule="afterInstallInitialize"
+                  DowngradeErrorMessage="A newer version of ncwin is already installed." />
+    <MediaTemplate EmbedCab="yes" MaximumUncompressedMediaSize="1024" CompressionLevel="mszip" />
+
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/mstan/nextcloud-server" />
+
+    <!-- Installer answers (dialog in ui.wxs; also settable on the msiexec command line). -->
+    <Property Id="NCWIN_DATADIR" Secure="yes" />
+    <SetProperty Id="NCWIN_DATADIR" Value="[WindowsVolume]NextcloudData\" Before="CostFinalize" Sequence="first" Condition="NOT NCWIN_DATADIR" />
+    <Property Id="NCWIN_DB" Value="pgsql" Secure="yes" />
+    <Property Id="NCWIN_HTTPPORT" Value="80" Secure="yes" />
+    <Property Id="NCWIN_HTTPSPORT" Value="443" Secure="yes" />
+    <Property Id="NCWIN_HOSTNAMES" Secure="yes" />
+    <SetProperty Id="NCWIN_HOSTNAMES" Value="[ComputerName]" Before="CostFinalize" Sequence="first" Condition="NOT NCWIN_HOSTNAMES" />
+    <Property Id="NCWIN_DOMAIN" Secure="yes" />
+    <Property Id="NCWIN_ACMEEMAIL" Secure="yes" />
+
+    <Launch Condition="VersionNT64 AND VersionNT >= 603" Message="ncwin requires 64-bit Windows 10 / Server 2016 or later." />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="ncwin" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="ncwin" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="Payload" />
+      <ComponentRef Id="Service" />
+      <ComponentRef Id="Firewall" />
+      <ComponentRef Id="LongPaths" />
+    </Feature>
+
+    <ComponentGroup Id="Payload" Directory="INSTALLFOLDER">
+      <Files Include="!(bindpath.payload)\**">
+        <Exclude Files="!(bindpath.payload)\ncwin.exe" />
+      </Files>
+    </ComponentGroup>
+
+    <Component Id="Service" Directory="INSTALLFOLDER">
+      <File Id="NcwinExe" Source="!(bindpath.payload)\ncwin.exe" KeyPath="yes" />
+      <ServiceInstall Id="NcwinService" Name="ncwin" DisplayName="Nextcloud (ncwin)"
+                      Description="Nextcloud server for Windows: web server, PHP, database, background jobs and file watcher."
+                      Type="ownProcess" Start="auto" ErrorControl="normal" Account="NT SERVICE\ncwin"
+                      Arguments="--config &quot;[CommonAppDataFolder]ncwin\ncwin.toml&quot;">
+      </ServiceInstall>
+      <ServiceControl Id="NcwinControl" Name="ncwin" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+    </Component>
+
+    <Component Id="Firewall" Directory="INSTALLFOLDER" Guid="5b3a2f0e-0f5c-4c79-9e43-6a3a1b8f2c11">
+      <!-- Per program, not per port: ports in ncwin.toml can change after install.
+           TCP for HTTP/1.1+2, UDP for HTTP/3 (QUIC). The databases bind 127.0.0.1 only. -->
+      <fire:FirewallException Id="FwWebTcp" Name="Nextcloud (ncwin) web" Program="[INSTALLFOLDER]php\frankenphp.exe" Protocol="tcp" Scope="any" Profile="all" />
+      <fire:FirewallException Id="FwWebUdp" Name="Nextcloud (ncwin) web (HTTP/3)" Program="[INSTALLFOLDER]php\frankenphp.exe" Protocol="udp" Scope="any" Profile="all" />
+      <RegistryValue Root="HKLM" Key="SOFTWARE\ncwin" Name="Firewall" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- Nextcloud paths (user/files/folder/versions/...) routinely exceed MAX_PATH. -->
+    <Component Id="LongPaths" Directory="INSTALLFOLDER" Guid="9d1f8e3a-2b7c-4c55-8f0d-1e6a7b3c4d22" Permanent="yes">
+      <RegistryValue Root="HKLM" Key="SYSTEM\CurrentControlSet\Control\FileSystem" Name="LongPathsEnabled" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- First install only: write ncwin.toml (kept if it exists) and provision
+         Nextcloud. Both run as SYSTEM after the service account exists (ACLs)
+         and before the service starts. Upgrades skip setup: the service runs
+         `occ upgrade` itself. Paths get a trailing "." so the MSI's trailing
+         backslash cannot escape the closing quote. -->
+    <!-- Delayed auto-start, pre-shutdown time for a clean DB stop, restart-on-failure
+         and the event-log source, via the SCM API (MSI's ServiceConfig table is unreliable). -->
+    <CustomAction Id="NcwinServiceConfig" FileRef="NcwinExe" Execute="deferred" Impersonate="no" Return="check"
+                  ExeCommand="service-config" />
+    <CustomAction Id="NcwinConfigure" FileRef="NcwinExe" Execute="deferred" Impersonate="no" Return="check"
+                  ExeCommand="configure --config &quot;[CommonAppDataFolder]ncwin\ncwin.toml&quot; --install-dir &quot;[INSTALLFOLDER].&quot; --state-dir &quot;[CommonAppDataFolder]ncwin&quot; --data-dir &quot;[NCWIN_DATADIR].&quot; --db [NCWIN_DB] --http-port [NCWIN_HTTPPORT] --https-port [NCWIN_HTTPSPORT] --hostnames &quot;[NCWIN_HOSTNAMES]&quot; --public-domain &quot;[NCWIN_DOMAIN]&quot; --acme-email &quot;[NCWIN_ACMEEMAIL]&quot;" />
+    <CustomAction Id="NcwinSetup" FileRef="NcwinExe" Execute="deferred" Impersonate="no" Return="check"
+                  ExeCommand="setup --config &quot;[CommonAppDataFolder]ncwin\ncwin.toml&quot; --generate-admin-pass" />
+
+    <InstallExecuteSequence>
+      <Custom Action="NcwinServiceConfig" After="InstallServices" Condition="NOT REMOVE" />
+      <Custom Action="NcwinConfigure" After="NcwinServiceConfig" Condition="NOT REMOVE" />
+      <Custom Action="NcwinSetup" After="NcwinConfigure" Condition="NOT REMOVE AND NOT WIX_UPGRADE_DETECTED" />
+    </InstallExecuteSequence>
+
+    <UIRef Id="NcwinUI" />
+  </Package>
+</Wix>
