@@ -12,6 +12,28 @@ the pieces that make it a service:
 | `tests/` | Windows integration tests |
 | `UPSTREAM.md` | how the fork tracks upstream; patch inventory |
 
+## Install
+
+Run `ncwin-<version>.msi` (elevated). The installer asks for the data
+directory, database (bundled PostgreSQL, MariaDB, or SQLite), ports, LAN host
+names and an optional public domain, then installs the `ncwin` service, runs
+`ncwin setup`, and starts it. The admin login is `admin`; its password is in
+`C:\ProgramData\ncwin\initial-admin-password.txt` (Administrators only) —
+change it after the first login. Unattended:
+
+```
+msiexec /i ncwin-35.0.2-win.1.msi /qn NCWIN_DATADIR=D:\NextcloudData\ NCWIN_DB=pgsql ^
+        NCWIN_HTTPSPORT=443 NCWIN_HOSTNAMES=nas,192.168.1.20 NCWIN_DOMAIN=cloud.example.com NCWIN_ACMEEMAIL=me@example.com
+```
+
+LAN sites use ncwin's own CA: `ncwin ca export ncwin-root.crt` and trust it
+on client devices (`ncwin ca trust` on the server itself).
+
+Upgrades: install a newer MSI (stops the service cleanly, swaps code, starts
+it; ncwin runs `occ upgrade` before serving), or `ncwin update` (snapshot,
+swap, health check, automatic rollback). Uninstall keeps
+`C:\ProgramData\ncwin` and the data directory.
+
 ## Runtime layout
 
 ```

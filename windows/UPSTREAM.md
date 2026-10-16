@@ -88,9 +88,34 @@ everything. The weekly canary should already have surfaced conflicts.
 | previews | `Preview/Movie.php`, `Preview/Office.php`, `Preview/Storage/LocalPreviewStorage.php` | `ffmpeg.exe` detection, LibreOffice `file:///C:/` URL + quoting, `\` iterator paths |
 | misc | `Log/File.php` (chmod per line), `Type/Detection.php` (`test -f`), `SchemaChecker.php` (regex), `PreviewCommand.php` | |
 
+| virtual-path `basename()` | ~65 sites → `PathHelper::basename()`; `Local::getSourcePath()` refuses `\` | on Windows `basename('a\b')` is `'b'`: name validation never saw the forbidden `\`, which the OS then treats as a separator |
+| overwrite of open files | `Local::rename()` → `replaceFileWindows()` | a deleted-but-open file (sync client, indexer, AV) blocks its name: delete-then-rename lost the old file and failed the new one; now move-aside, move-in, delete, restore on failure |
+| defaults | `OC_Util::checkDataDirectoryPermissions`, `Local` | mode-bit check off and `localstorage.case_insensitive` on by default on Windows (explicit config still wins) |
+| `Filesystem::mount()` | `lib/private/Files/Filesystem.php` | `setupFS()` without a user leaves the mount manager null |
+| object-store URNs | `StorageObjectStore` | `:` in `urn:oid:N` names an NTFS alternate data stream |
+| line endings | `JSCombiner`, `JSConfigHelper`, `EMailTemplate` | `PHP_EOL` made generated JS/mail differ per platform |
+| integrity signing | `Checker::loadDownstreamCertificate()`, `resources/codesigning/downstream-root.crt` | patched core is re-signed by the downstream root, trusted for exact-CN matches only |
+| tests | `tests/lib/TestCase.php` (`linkDirectory()`), `LocalTest`, `Storage`, `LogFactoryTest`, `AppDirsWithDifferentOwnerTest`, new `LocalWindowsSemanticsTest`, `PathHelperOsPathTest` | junction fallback where symlinks need privileges; skips only for cases impossible on NTFS/Windows |
+
 Release-only apps (not in this repo, e.g. `recommendations`, `photos`, `serverinfo`, `logreader`) have a few cosmetic `dirname()`/`'/'` issues; not patched yet.
+
+### How the patch set is verified
+
+- `windows/build/lint_windows.py`: every bare `dirname()`/`basename()`/`posix_*()` in core is routed, guarded or reviewed (`lint-windows-allow.txt`). New upstream code fails the lint until classified.
+- `windows/tests/phpunit-windows.sh` + `junit_check.py`: upstream PHPUnit suites for the touched code, on Windows; only `phpunit-known-upstream.txt` failures (which also fail on stock Linux) are tolerated.
+- `windows/tests/linux-compare.sh <ref> <tests...>`: the same suites on Linux (Docker) for stock and patched refs; patched must not fail anything stock passes.
+- `windows/tests` (Go): integration suite against a running install (WebDAV, case conflicts, reserved names, long paths, chunked upload, direct disk edits).
 
 ### Runtime requirements handled outside PHP
 
 - `OPENSSL_CONF` must point at `php/extras/ssl/openssl.cnf`, or `openssl_pkey_new()` fails ("Unable to create the key").
 - Caddy `skip_install_trust`: `tls internal` otherwise blocks on Windows trust-store installation.
+- `opcache.enable_cli = 0`, `opcache.file_cache_fallback`: Windows shares one OPcache segment per user; a process mapping `php8ts.dll` elsewhere dies with "Opcode handlers are unusable due to ASLR".
+- Bundled PostgreSQL runs with a restricted token: `postgres.exe` refuses administrative rights, and setup runs as SYSTEM under the MSI.
+
+### Disproved (do not re-investigate)
+
+- "Install hangs": the first hang was `findWebRoot()` at a drive root, the second `dirname('/x') === '\'`; the remaining slowness was SQLite fsync on a slow disk (CPU idle, WAL growing).
+- `files_sharing` `CacheTest::testShareRenameOriginalFileInRecentResults` failing on Windows: stale state in a reused test instance (users with a last-login but no skeleton); passes on a fresh instance.
+- `files_trashbin` `StorageTest::testDeleteVersionsOfFileAsRecipient`: flaky upstream (also fails on stock Linux sometimes).
+- `ObjectStore\LocalTest` "not allowed to access the database": upstream test-isolation issue when the file runs alone (stock Linux too).
