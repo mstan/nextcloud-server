@@ -183,5 +183,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
 } finally { Pop-Location }
 
+Copy-Item (Join-Path $repo 'windows\supervisor\ncwin.toml.example') $stage
+
 Move-Item $stage $Out
 Write-Host "assembled $Out"
