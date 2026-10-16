@@ -460,7 +460,9 @@ class OC_Util {
 	 * @internal
 	 */
 	public static function checkDataDirectoryPermissions($dataDirectory) {
-		if (!Server::get(IConfig::class)->getSystemValueBool('check_data_directory_permissions', true)) {
+		// Windows: Unix mode bits do not exist (fileperms() reports 0777 for every
+		// directory and chmod() cannot change that); NTFS ACLs protect the data.
+		if (!Server::get(IConfig::class)->getSystemValueBool('check_data_directory_permissions', DIRECTORY_SEPARATOR !== '\\')) {
 			return  [];
 		}
 

@@ -66,7 +66,8 @@ class Local extends Common {
 		$this->config = Server::get(IConfig::class);
 		$this->mimeTypeDetector = Server::get(IMimeTypeDetector::class);
 		$this->defUMask = $this->config->getSystemValue('localstorage.umask', 0022);
-		$this->caseInsensitive = $this->config->getSystemValueBool('localstorage.case_insensitive', false);
+		// NTFS (Windows' default) is case-insensitive; elsewhere assume case-sensitive.
+		$this->caseInsensitive = $this->config->getSystemValueBool('localstorage.case_insensitive', DIRECTORY_SEPARATOR === '\\');
 
 		// support Write-Once-Read-Many file systems
 		$this->unlinkOnTruncate = $this->config->getSystemValueBool('localstorage.unlink_on_truncate', false);
