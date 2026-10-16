@@ -5,7 +5,7 @@ name: ncwin CI
 
 on:
   push:
-    branches: ['master', 'win/**']
+    branches: ['master']  # master mirrors win/NN; avoid a duplicate run per push
   pull_request:
     branches: ['master', 'win/**']
   workflow_dispatch:
@@ -18,6 +18,8 @@ jobs:
   supervisor:
     runs-on: windows-latest
     steps:
+      - name: Check out byte-for-byte (no CRLF conversion)
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
@@ -42,11 +44,18 @@ jobs:
     # Every PHP file the fork touches must parse on the PHP version we ship.
     runs-on: windows-latest
     steps:
+      - name: Check out byte-for-byte (no CRLF conversion)
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Fetch upstream tags
-        run: git fetch --no-tags https://github.com/nextcloud/server.git "+refs/tags/*:refs/tags/*"
+        # Only the base tag: upstream has tags differing only in case, which
+        # collide on Windows' case-insensitive file system.
+        shell: bash
+        run: |
+          tag="v$(jq -r .nextcloud.version windows/build/deps.lock.json)"
+          git fetch --no-tags https://github.com/nextcloud/server.git "+refs/tags/$tag:refs/tags/$tag"
       - name: Lint patched PHP files
         shell: pwsh
         run: |
@@ -69,6 +78,8 @@ jobs:
     # Linux) are tolerated.
     runs-on: windows-latest
     steps:
+      - name: Check out byte-for-byte (no CRLF conversion)
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
           submodules: true
@@ -115,6 +126,8 @@ jobs:
       # `secrets` is not available in step conditions; expose presence via env.
       HAS_SIGNING_KEYS: ${{ secrets.NCWIN_SIGNING_KEYS != '' }}
     steps:
+      - name: Check out byte-for-byte (no CRLF conversion)
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -122,7 +135,12 @@ jobs:
         with:
           go-version-file: windows/supervisor/go.mod
       - name: Fetch upstream tags
-        run: git fetch --no-tags https://github.com/nextcloud/server.git "+refs/tags/*:refs/tags/*"
+        # Only the base tag: upstream has tags differing only in case, which
+        # collide on Windows' case-insensitive file system.
+        shell: bash
+        run: |
+          tag="v$(jq -r .nextcloud.version windows/build/deps.lock.json)"
+          git fetch --no-tags https://github.com/nextcloud/server.git "+refs/tags/$tag:refs/tags/$tag"
       - name: Restore signing keys
         if: env.HAS_SIGNING_KEYS == 'true'
         shell: pwsh

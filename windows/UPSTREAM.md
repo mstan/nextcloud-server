@@ -35,6 +35,15 @@ gh api --paginate repos/mstan/nextcloud-server/actions/workflows --jq '.workflow
 Without `NCWIN_SIGNING_KEYS`, CI builds are unsigned (`-NoSign`); build signed
 releases locally with `assemble.ps1`. Actions minutes are free for public repos.
 
+## Pinned dependencies
+
+`windows/build/deps.lock.json` pins every third-party download by SHA-256.
+Mutable upstream URLs (FrankenPHP re-uploads its Windows zip daily) are
+mirrored as assets of the `deps` pre-release on this repo, with the original
+in `upstream_url`. To update one: download the new build, compare it file by
+file with the current one (which binaries changed, and why), test, then upload
+it to `deps` under a versioned, hash-suffixed name and update the lock.
+
 ## Point release (e.g. 35.0.2 → 35.0.3)
 
 ```sh
