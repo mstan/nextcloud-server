@@ -154,7 +154,7 @@ class FilesDropPlugin extends ServerPlugin {
 
 		// Create the folders along the way
 		$folder = $node;
-		$pathSegments = $this->getPathSegments(dirname($relativePath));
+		$pathSegments = $this->getPathSegments(\OC\Files\Utils\PathHelper::dirname($relativePath));
 		foreach ($pathSegments as $pathSegment) {
 			if ($pathSegment === '') {
 				continue;

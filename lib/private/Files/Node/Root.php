@@ -515,7 +515,7 @@ class Root extends Folder implements IRootFolder, Emitter {
 		$fullPath = $mountPoint->getMountPoint() . $path;
 		// todo: LazyNode?
 		$info = new FileInfo($fullPath, $mountPoint->getStorage(), $path, $cacheEntry, $mountPoint);
-		$parentPath = dirname($fullPath);
+		$parentPath = \OC\Files\Utils\PathHelper::dirname($fullPath);
 		$parent = new LazyFolder($this, function () use ($parentPath) {
 			$parent = $this->get($parentPath);
 			if ($parent instanceof \OCP\Files\Folder) {

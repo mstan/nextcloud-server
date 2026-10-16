@@ -502,7 +502,7 @@ class Storage {
 		$pathinfo = pathinfo($filename);
 		$versionedFile = $pathinfo['basename'];
 
-		$dir = Filesystem::normalizePath(self::VERSIONS_ROOT . '/' . $pathinfo['dirname']);
+		$dir = Filesystem::normalizePath(self::VERSIONS_ROOT . '/' . \OC\Files\Utils\PathHelper::dirname($filename));
 
 		$dirContent = false;
 		if ($view->is_dir($dir)) {
@@ -543,7 +543,7 @@ class Storage {
 							$versions[$key]['preview'] = $urlGenerator->linkToRoute('files_version.Preview.getPreview',
 								['file' => $userFullPath, 'version' => $timestamp]);
 						}
-						$versions[$key]['path'] = Filesystem::normalizePath($pathinfo['dirname'] . '/' . $filename);
+						$versions[$key]['path'] = Filesystem::normalizePath(\OC\Files\Utils\PathHelper::dirname($filename) . '/' . $filename);
 						$versions[$key]['name'] = $versionedFile;
 						$versions[$key]['size'] = $view->filesize($dir . '/' . $entryName);
 						$versions[$key]['mimetype'] = Server::get(IMimeTypeDetector::class)->detectPath($versionedFile);
@@ -1020,7 +1020,7 @@ class Storage {
 	 * @param View $view view on data/user/
 	 */
 	public static function createMissingDirectories($filename, $view) {
-		$dirname = Filesystem::normalizePath(dirname($filename));
+		$dirname = Filesystem::normalizePath(\OC\Files\Utils\PathHelper::dirname($filename));
 		$dirParts = explode('/', $dirname);
 		$dir = '/files_versions';
 		foreach ($dirParts as $part) {

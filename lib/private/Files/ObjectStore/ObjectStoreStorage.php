@@ -101,7 +101,7 @@ class ObjectStoreStorage extends Common implements IChunkedFileWrite {
 			return true;
 		} else {
 			// if parent does not exist, create it
-			$parent = $this->normalizePath(dirname($path));
+			$parent = $this->normalizePath(\OC\Files\Utils\PathHelper::dirname($path));
 			$parentType = $this->filetype($parent);
 			if ($parentType === false) {
 				if (!$this->mkdir($parent)) {
@@ -359,7 +359,7 @@ class ObjectStoreStorage extends Common implements IChunkedFileWrite {
 			case 'wb':
 			case 'w+':
 			case 'wb+':
-				$dirName = dirname($path);
+				$dirName = \OC\Files\Utils\PathHelper::dirname($path);
 				$parentExists = $this->is_dir($dirName);
 				if (!$parentExists) {
 					return false;
@@ -405,7 +405,7 @@ class ObjectStoreStorage extends Common implements IChunkedFileWrite {
 		$target = $this->normalizePath($target);
 		$this->remove($target);
 		$this->getCache()->move($source, $target);
-		$this->touch(dirname($target));
+		$this->touch(\OC\Files\Utils\PathHelper::dirname($target));
 		return true;
 	}
 
@@ -422,7 +422,7 @@ class ObjectStoreStorage extends Common implements IChunkedFileWrite {
 		}
 
 		$path = $this->normalizePath($path);
-		$dirName = dirname($path);
+		$dirName = \OC\Files\Utils\PathHelper::dirname($path);
 		$parentExists = $this->is_dir($dirName);
 		if (!$parentExists) {
 			return false;
@@ -518,7 +518,7 @@ class ObjectStoreStorage extends Common implements IChunkedFileWrite {
 		if ($exists) {
 			$fileId = $stat['fileid'];
 		} else {
-			$parent = $this->normalizePath(dirname($path));
+			$parent = $this->normalizePath(\OC\Files\Utils\PathHelper::dirname($path));
 			if (!$this->is_dir($parent)) {
 				throw new \InvalidArgumentException("trying to upload a file ($path) inside a non-directory ($parent)");
 			}

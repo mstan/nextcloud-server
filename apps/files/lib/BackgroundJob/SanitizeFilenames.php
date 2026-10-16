@@ -212,7 +212,7 @@ class SanitizeFilenames extends QueuedJob {
 			$newName = $this->filenameValidator->sanitizeFilename($oldName, $this->charReplacement);
 			if ($oldName !== $newName) {
 				$newName = $node->getParent()->getNonExistingName($newName);
-				$path = rtrim(dirname($node->getPath()), '/');
+				$path = rtrim(\OC\Files\Utils\PathHelper::dirname($node->getPath()), '/');
 
 				$node->move("$path/$newName");
 			}

@@ -215,7 +215,7 @@ class QuotaPlugin extends \Sabre\DAV\ServerPlugin {
 		}
 
 		// Otherwise, use the parent directory's path
-		$parent = dirname($destinationPath);
+		$parent = \OC\Files\Utils\PathHelper::dirname($destinationPath);
 		$parent = ($parent === '.') ? '' : $parent;
 
 		$parentNode = $this->server->tree->getNodeForPath($parent);

@@ -34,7 +34,7 @@ class Helper {
 		$pathinfo = pathinfo($path);
 		$ext = isset($pathinfo['extension']) ? '.' . $pathinfo['extension'] : '';
 		$name = $pathinfo['filename'];
-		$dir = $pathinfo['dirname'];
+		$dir = \OC\Files\Utils\PathHelper::dirname($path);
 		$i = 2;
 		while ($view->file_exists($path)) {
 			$path = Filesystem::normalizePath($dir . '/' . $name . ' (' . $i . ')' . $ext);

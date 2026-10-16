@@ -320,12 +320,12 @@ class SharedStorage extends Jail implements LegacyISharedStorage, ISharedStorage
 			case 'xb':
 			case 'a':
 			case 'ab':
-				$creatable = $this->isCreatable(dirname($path));
+				$creatable = $this->isCreatable(\OC\Files\Utils\PathHelper::dirname($path));
 				$updatable = $this->isUpdatable($path);
 				// if neither permissions given, no need to continue
 				if (!$creatable && !$updatable) {
 					if (pathinfo($path, PATHINFO_EXTENSION) === 'part') {
-						$updatable = $this->isUpdatable(dirname($path));
+						$updatable = $this->isUpdatable(\OC\Files\Utils\PathHelper::dirname($path));
 					}
 
 					if (!$updatable) {
@@ -360,7 +360,7 @@ class SharedStorage extends Jail implements LegacyISharedStorage, ISharedStorage
 		$this->init();
 		$isPartFile = pathinfo($source, PATHINFO_EXTENSION) === 'part';
 		$targetExists = $this->file_exists($target);
-		$sameFolder = dirname($source) === dirname($target);
+		$sameFolder = \OC\Files\Utils\PathHelper::dirname($source) === \OC\Files\Utils\PathHelper::dirname($target);
 
 		if ($targetExists || ($sameFolder && !$isPartFile)) {
 			if (!$this->isUpdatable('')) {
@@ -497,7 +497,7 @@ class SharedStorage extends Jail implements LegacyISharedStorage, ISharedStorage
 		// lock the parent folders of the owner when locking the share as recipient
 		if ($path === '') {
 			$sourcePath = $this->ownerUserFolder->getRelativePath($this->sourcePath);
-			$this->ownerView->lockFile(dirname($sourcePath), ILockingProvider::LOCK_SHARED, true);
+			$this->ownerView->lockFile(\OC\Files\Utils\PathHelper::dirname($sourcePath), ILockingProvider::LOCK_SHARED, true);
 		}
 	}
 
@@ -509,7 +509,7 @@ class SharedStorage extends Jail implements LegacyISharedStorage, ISharedStorage
 		// unlock the parent folders of the owner when unlocking the share as recipient
 		if ($path === '') {
 			$sourcePath = $this->ownerUserFolder->getRelativePath($this->sourcePath);
-			$this->ownerView->unlockFile(dirname($sourcePath), ILockingProvider::LOCK_SHARED, true);
+			$this->ownerView->unlockFile(\OC\Files\Utils\PathHelper::dirname($sourcePath), ILockingProvider::LOCK_SHARED, true);
 		}
 	}
 

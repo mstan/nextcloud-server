@@ -97,7 +97,7 @@ class ViewOnlyPlugin extends ServerPlugin {
 				case 'COPY':
 				case 'MOVE':
 					$destinationPath = $this->server->getCopyAndMoveInfo($request)['destination'];
-					$destinationParentPath = dirname($destinationPath);
+					$destinationParentPath = \OC\Files\Utils\PathHelper::dirname($destinationPath);
 					if ($destinationParentPath === '.') {
 						$destinationParentPath = '';
 					}

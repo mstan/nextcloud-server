@@ -59,7 +59,7 @@ class Put {
 			}
 			stream_copy_to_stream($source, $target);
 		} else {
-			$parentPath = dirname($file);
+			$parentPath = \OC\Files\Utils\PathHelper::dirname($file);
 			if (!$this->rootFolder->nodeExists($parentPath)) {
 				$this->rootFolder->newFolder($parentPath);
 			}

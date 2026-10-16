@@ -177,7 +177,7 @@ class ChunkingV2Plugin extends ServerPlugin {
 
 	public function beforePut(RequestInterface $request, ResponseInterface $response): bool {
 		try {
-			$this->prepareUpload(dirname($request->getPath()));
+			$this->prepareUpload(\OC\Files\Utils\PathHelper::dirname($request->getPath()));
 			$this->checkPrerequisites();
 		} catch (StorageInvalidException|BadRequest|NotFound $e) {
 			return true;
@@ -225,7 +225,7 @@ class ChunkingV2Plugin extends ServerPlugin {
 
 	public function beforeMove($sourcePath, $destination): bool {
 		try {
-			$this->prepareUpload(dirname($sourcePath));
+			$this->prepareUpload(\OC\Files\Utils\PathHelper::dirname($sourcePath));
 			$this->checkPrerequisites();
 		} catch (StorageInvalidException|BadRequest|NotFound|PreconditionFailed $e) {
 			return true;
@@ -290,7 +290,7 @@ class ChunkingV2Plugin extends ServerPlugin {
 
 	public function beforeDelete(RequestInterface $request, ResponseInterface $response) {
 		try {
-			$this->prepareUpload(dirname($request->getPath()));
+			$this->prepareUpload(\OC\Files\Utils\PathHelper::dirname($request->getPath()));
 			$this->checkPrerequisites();
 		} catch (StorageInvalidException|BadRequest|NotFound $e) {
 			return true;

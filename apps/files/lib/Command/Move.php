@@ -49,7 +49,7 @@ class Move {
 			return ExitCode::Failure;
 		}
 
-		$targetParentPath = dirname(rtrim($target, '/'));
+		$targetParentPath = \OC\Files\Utils\PathHelper::dirname(rtrim($target, '/'));
 		$targetParent = $this->fileUtils->getNode($targetParentPath);
 		if (!$targetParent) {
 			$output->writeln("<error>Target parent path $targetParentPath doesn't exist</error>");

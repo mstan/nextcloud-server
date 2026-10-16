@@ -71,9 +71,9 @@ class PermissionsMask extends Wrapper {
 	#[\Override]
 	public function rename(string $source, string $target): bool {
 		//This is a rename of the transfer file to the original file
-		$sourceDir = dirname($source);
-		$targetDir = dirname($target);
-		if (($sourceDir === $targetDir || $sourceDir === dirname($targetDir)) && strpos($source, '.ocTransferId') > 0) {
+		$sourceDir = \OC\Files\Utils\PathHelper::dirname($source);
+		$targetDir = \OC\Files\Utils\PathHelper::dirname($target);
+		if (($sourceDir === $targetDir || $sourceDir === \OC\Files\Utils\PathHelper::dirname($targetDir)) && strpos($source, '.ocTransferId') > 0) {
 			return $this->checkMask(Constants::PERMISSION_CREATE) && parent::rename($source, $target);
 		}
 		return $this->checkMask(Constants::PERMISSION_UPDATE) && parent::rename($source, $target);

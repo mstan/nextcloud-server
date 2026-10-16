@@ -212,7 +212,7 @@ class View {
 	 * @return string|false Local file path, or false if unavailable
 	 */
 	public function getLocalFile(string $path): string|false {
-		$parentPath = dirname($path);
+		$parentPath = \OC\Files\Utils\PathHelper::dirname($path);
 		if (!Filesystem::isValidPath($parentPath)) {
 			return false;
 		}
@@ -758,7 +758,7 @@ class View {
 			}
 
 			try {
-				$this->verifyPath(dirname($target), basename($target));
+				$this->verifyPath(\OC\Files\Utils\PathHelper::dirname($target), basename($target));
 			} catch (InvalidPathException) {
 				return false;
 			}
@@ -805,7 +805,7 @@ class View {
 						}
 
 						if ($internalPath1 === '') {
-							$sourceParentMount = $this->getMount(dirname($source));
+							$sourceParentMount = $this->getMount(\OC\Files\Utils\PathHelper::dirname($source));
 							$movedMounts[] = $mount1;
 							$this->validateMountMove($movedMounts, $sourceParentMount, $mount2, !$this->targetIsNotShared($targetUser, $absolutePath2));
 							/**
@@ -1103,7 +1103,7 @@ class View {
 		$this->assertPathLength($path);
 		if (Filesystem::isValidPath($path)) {
 			// Get directory that the file is going into
-			$filePath = dirname($path);
+			$filePath = \OC\Files\Utils\PathHelper::dirname($path);
 
 			// Create the directories if any
 			if (!$this->file_exists($filePath)) {
@@ -2054,7 +2054,7 @@ class View {
 			$internalPath = $mount->getInternalPath($absolutePath);
 			if ($internalPath === '') {
 				// resolve the parent mount instead
-				$mount = Filesystem::getMountManager()->find(dirname($absolutePath));
+				$mount = Filesystem::getMountManager()->find(\OC\Files\Utils\PathHelper::dirname($absolutePath));
 			}
 		}
 

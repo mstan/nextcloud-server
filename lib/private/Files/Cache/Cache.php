@@ -562,7 +562,7 @@ class Cache implements ICache {
 	}
 
 	private function getParentPath($path) {
-		$parent = dirname($path);
+		$parent = \OC\Files\Utils\PathHelper::dirname($path);
 		if ($parent === '.') {
 			$parent = '';
 		}
@@ -995,7 +995,7 @@ class Cache implements ICache {
 		$this->calculateFolderSize($path, $data);
 
 		if ($path !== '') {
-			$parent = dirname($path);
+			$parent = \OC\Files\Utils\PathHelper::dirname($path);
 			if ($parent === '.' || $parent === '/') {
 				$parent = '';
 			}

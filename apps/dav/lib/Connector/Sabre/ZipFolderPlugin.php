@@ -175,7 +175,7 @@ class ZipFolderPlugin extends ServerPlugin {
 		$rootPath = $folder->getPath();
 		if (empty($files)) {
 			// We download the full folder so keep it in the tree
-			$rootPath = dirname($folder->getPath());
+			$rootPath = \OC\Files\Utils\PathHelper::dirname($folder->getPath());
 		}
 
 		$streamer = new Streamer($tarRequest, -1, count($content), $this->timezoneFactory);

@@ -146,7 +146,7 @@ class SetupManager implements ISetupManager {
 		}
 
 		// or if any of the ancestors was fully setup
-		while (($path = dirname($path)) !== '/') {
+		while (($path = \OC\Files\Utils\PathHelper::dirname($path)) !== '/') {
 			$setupPath = $this->setupMountProviderPaths[$path . '/'] ?? null;
 			if ($setupPath === self::SETUP_WITH_CHILDREN) {
 				return true;

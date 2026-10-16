@@ -143,7 +143,7 @@ abstract class Common implements Storage, ILockingStorage, IWriteStreamStorage, 
 		if ($path === '' || $path === '/') {
 			return $this->isUpdatable($path);
 		}
-		$parent = dirname($path);
+		$parent = \OC\Files\Utils\PathHelper::dirname($path);
 		return $this->isUpdatable($parent) && $this->isUpdatable($path);
 	}
 
@@ -509,7 +509,7 @@ abstract class Common implements Storage, ILockingStorage, IWriteStreamStorage, 
 		// verify also the path is valid
 		if ($path && $path !== '/' && $path !== '.') {
 			try {
-				$this->verifyPath(dirname($path), basename($path));
+				$this->verifyPath(\OC\Files\Utils\PathHelper::dirname($path), basename($path));
 			} catch (InvalidPathException $e) {
 				// Ignore invalid file type exceptions on directories
 				if ($e->getCode() !== FilenameValidator::INVALID_FILE_TYPE) {

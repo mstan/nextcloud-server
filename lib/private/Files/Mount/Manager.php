@@ -102,7 +102,7 @@ class Manager implements IMountManager {
 				break;
 			}
 
-			$current = dirname($current);
+			$current = \OC\Files\Utils\PathHelper::dirname($current);
 			if ($current === '.' || $current === '/') {
 				$current = '';
 			}

@@ -388,7 +388,7 @@ class Provider implements IProvider {
 		if (!$file) {
 			try {
 				// Deleted, try with parent
-				$file = $this->findExistingParent($userFolder, dirname($path));
+				$file = $this->findExistingParent($userFolder, \OC\Files\Utils\PathHelper::dirname($path));
 			} catch (NotFoundException $e) {
 				return null;
 			}
@@ -424,9 +424,9 @@ class Provider implements IProvider {
 		}
 
 		try {
-			$folder = $userFolder->get(dirname($path));
+			$folder = $userFolder->get(\OC\Files\Utils\PathHelper::dirname($path));
 		} catch (NotFoundException $e) {
-			return $this->findExistingParent($userFolder, dirname($path));
+			return $this->findExistingParent($userFolder, \OC\Files\Utils\PathHelper::dirname($path));
 		}
 
 		return $folder;

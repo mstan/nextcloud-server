@@ -94,7 +94,7 @@ class DirPermissionsMask extends PermissionsMask {
 
 	#[\Override]
 	public function rename($source, $target): bool {
-		$isPartialUploadFile = dirname($source) === dirname($target)
+		$isPartialUploadFile = \OC\Files\Utils\PathHelper::dirname($source) === \OC\Files\Utils\PathHelper::dirname($target)
 			&& strpos($source, '.ocTransferId') > 0;
 
 		if (
@@ -111,7 +111,7 @@ class DirPermissionsMask extends PermissionsMask {
 				return $this->storage->rename($source, $target);
 			}
 		} else {
-			$parent = dirname($target);
+			$parent = \OC\Files\Utils\PathHelper::dirname($target);
 			if ($parent === '.') {
 				$parent = '';
 			}
@@ -135,7 +135,7 @@ class DirPermissionsMask extends PermissionsMask {
 				return $this->storage->copy($source, $target);
 			}
 		} else {
-			$parent = dirname($target);
+			$parent = \OC\Files\Utils\PathHelper::dirname($target);
 			if ($parent === '.') {
 				$parent = '';
 			}

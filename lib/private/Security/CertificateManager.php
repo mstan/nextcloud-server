@@ -153,7 +153,7 @@ class CertificateManager implements ICertificateManager {
 	#[\Override]
 	public function addCertificate(string $certificate, string $name): ICertificate {
 		$path = $this->getPathToCertificates() . 'uploads/' . $name;
-		$directory = dirname($path);
+		$directory = \OC\Files\Utils\PathHelper::dirname($path);
 
 		$this->view->verifyPath($directory, basename($path));
 		$this->bundlePath = null;
@@ -180,7 +180,7 @@ class CertificateManager implements ICertificateManager {
 		$path = $this->getPathToCertificates() . 'uploads/' . $name;
 
 		try {
-			$this->view->verifyPath(dirname($path), basename($path));
+			$this->view->verifyPath(\OC\Files\Utils\PathHelper::dirname($path), basename($path));
 		} catch (\Exception) {
 			return false;
 		}

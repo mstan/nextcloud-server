@@ -158,7 +158,7 @@ class ViewController extends Controller {
 			$nodes = $baseFolder->getById((int)$fileid);
 			if (!empty($nodes)) {
 				$nodePath = $baseFolder->getRelativePath($nodes[0]->getPath());
-				$relativePath = $nodePath ? dirname($nodePath) : '';
+				$relativePath = $nodePath ? \OC\Files\Utils\PathHelper::dirname($nodePath) : '';
 				// If the requested path does not contain the file id
 				// or if the requested path is not the file id itself
 				if (count($nodes) === 1 && $relativePath !== $dir && $nodePath !== $dir) {

@@ -150,11 +150,11 @@ class TemplateManager implements ITemplateManager {
 		} catch (NotFoundException $e) {
 		}
 		try {
-			if (!$userFolder->nodeExists(dirname($filePath))) {
+			if (!$userFolder->nodeExists(\OC\Files\Utils\PathHelper::dirname($filePath))) {
 				throw new GenericFileException($this->l10n->t('Invalid path'));
 			}
 			/** @var Folder $folder */
-			$folder = $userFolder->get(dirname($filePath));
+			$folder = $userFolder->get(\OC\Files\Utils\PathHelper::dirname($filePath));
 			$template = null;
 			if ($templateType === 'user' && $templateId !== '') {
 				$template = $userFolder->get($templateId);

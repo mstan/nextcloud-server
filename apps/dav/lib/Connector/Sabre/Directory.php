@@ -533,7 +533,7 @@ class Directory extends Node implements
 		}
 
 		$destinationPath = PathHelper::normalizePath($this->getPath() . '/' . $path);
-		$destinationDir = dirname($destinationPath);
+		$destinationDir = \OC\Files\Utils\PathHelper::dirname($destinationPath);
 
 		try {
 			$info = $this->getNode()->get($path);
@@ -562,7 +562,7 @@ class Directory extends Node implements
 		// ACL checks working in files_accesscontrol
 		if (!$allowDirectory && $destinationDir !== '') {
 			$scanPath = $destinationPath;
-			while (($scanPath = dirname($scanPath)) !== '/') {
+			while (($scanPath = \OC\Files\Utils\PathHelper::dirname($scanPath)) !== '/') {
 				// fileView can get the parent info in a cheaper way compared
 				// to the node API
 				/** @psalm-suppress InternalMethod */

@@ -99,7 +99,7 @@ class Updater implements IUpdater {
 			return;
 		}
 
-		$parent = dirname($path);
+		$parent = \OC\Files\Utils\PathHelper::dirname($path);
 		if ($parent === '.') {
 			$parent = '';
 		}
@@ -123,7 +123,7 @@ class Updater implements IUpdater {
 	#[Override]
 	public function renameFromStorage(IStorage $sourceStorage, string $source, string $target): void {
 		$this->copyOrRenameFromStorage($sourceStorage, $source, $target, function (ICache $sourceCache) use ($sourceStorage, $source, $target): void {
-			$parent = dirname($target);
+			$parent = \OC\Files\Utils\PathHelper::dirname($target);
 			if ($parent === '.') {
 				$parent = '';
 			}
@@ -149,7 +149,7 @@ class Updater implements IUpdater {
 	#[Override]
 	public function copyFromStorage(IStorage $sourceStorage, string $source, string $target): void {
 		$this->copyOrRenameFromStorage($sourceStorage, $source, $target, function (ICache $sourceCache, ICacheEntry $sourceInfo) use ($target): void {
-			$parent = dirname($target);
+			$parent = \OC\Files\Utils\PathHelper::dirname($target);
 			if ($parent === '.') {
 				$parent = '';
 			}
@@ -244,7 +244,7 @@ class Updater implements IUpdater {
 		if ($parentId === null) {
 			$parentId = $this->cache->getParentId($internalPath);
 		}
-		$parent = dirname($internalPath);
+		$parent = \OC\Files\Utils\PathHelper::dirname($internalPath);
 		if ($parentId !== -1) {
 			$mtime = $this->storage->filemtime($parent);
 			if ($mtime !== false) {
