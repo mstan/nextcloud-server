@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Microsoft/go-winio"
+	"golang.org/x/sys/windows"
 )
 
 const PipeName = `\\.\pipe\ncwin`
@@ -56,7 +57,15 @@ type Server struct {
 // Serve accepts connections until ctx is done.
 func (s Server) Serve(ctx context.Context) error {
 	sd := sddl
-	if s.AllowSID != "" {
+	// The server's own account must be in the DACL, or it cannot create the
+	// further pipe instances that each Accept needs: the service runs as
+	// NT SERVICE\ncwin, which is neither SYSTEM nor an administrator.
+	self, err := processSID()
+	if err != nil {
+		return fmt.Errorf("current account SID: %w", err)
+	}
+	sd += "(A;;GA;;;" + self + ")"
+	if s.AllowSID != "" && s.AllowSID != self {
 		sd += "(A;;GA;;;" + s.AllowSID + ")"
 	}
 	l, err := winio.ListenPipe(PipeName, &winio.PipeConfig{SecurityDescriptor: sd, InputBufferSize: 64 << 10, OutputBufferSize: 64 << 10})
@@ -175,4 +184,14 @@ func Call(op string, args any, stream io.Writer, out any) error {
 		}
 		return nil
 	}
+}
+
+// processSID returns the SID of the account this process runs as.
+func processSID() (string, error) {
+	tok := windows.GetCurrentProcessToken()
+	u, err := tok.GetTokenUser()
+	if err != nil {
+		return "", err
+	}
+	return u.User.Sid.String(), nil
 }

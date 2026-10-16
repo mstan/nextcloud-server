@@ -120,36 +120,129 @@ func Init(ctx context.Context, c config.Config, logf *os.File) error {
 	return fmt.Errorf("unsupported bundled type %q", c.Database.Type)
 }
 
-// CreateAppUser creates the Nextcloud database and user on a running bundled server.
-func CreateAppUser(ctx context.Context, c config.Config, logf *os.File) error {
+// superSQL runs one statement as the bundled server's superuser, connected to
+// database dbName ("" for the server's maintenance database), and returns its
+// unformatted output. Errors are also written to logf.
+func superSQL(ctx context.Context, c config.Config, logf *os.File, dbName, sql string) (string, error) {
 	super, err := readSecret(c)
+	if err != nil {
+		return "", err
+	}
+	port := strconv.Itoa(c.Database.Port)
+	var cmd *exec.Cmd
+	switch c.Database.Type {
+	case "mysql":
+		args := []string{"-h", "127.0.0.1", "-P", port, "-u", "root", "-N", "-B", "-e", sql}
+		if dbName != "" {
+			args = append(args, dbName)
+		}
+		cmd = exec.CommandContext(ctx, filepath.Join(binDir(c), "mariadb.exe"), args...)
+		cmd.Env = append(os.Environ(), "MYSQL_PWD="+super)
+	case "pgsql":
+		if dbName == "" {
+			dbName = "postgres"
+		}
+		cmd = exec.CommandContext(ctx, filepath.Join(binDir(c), "psql.exe"), "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", dbName,
+			"-v", "ON_ERROR_STOP=1", "-X", "-q", "-t", "-A", "-c", sql)
+		cmd.Env = append(os.Environ(), "PGPASSWORD="+super)
+	default:
+		return "", fmt.Errorf("unsupported bundled type %q", c.Database.Type)
+	}
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	out, err := cmd.Output()
+	if err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		fmt.Fprintf(logf, "%s: %v: %s\n", filepath.Base(cmd.Path), err, msg)
+		return "", fmt.Errorf("%s: %v: %s", filepath.Base(cmd.Path), err, msg)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func sqlString(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+func pgIdent(s string) string   { return `"` + strings.ReplaceAll(s, `"`, `""`) + `"` }
+func myIdent(s string) string   { return "`" + strings.ReplaceAll(s, "`", "``") + "`" }
+
+// CreateAppUser makes sure the Nextcloud database and user exist on a running
+// bundled server, with the password from ncwin.toml. Safe to repeat.
+func CreateAppUser(ctx context.Context, c config.Config, logf *os.File) error {
+	d := c.Database
+	switch d.Type {
+	case "mysql":
+		user := sqlString(d.User) + "@'127.0.0.1'"
+		_, err := superSQL(ctx, c, logf, "", "CREATE DATABASE IF NOT EXISTS "+myIdent(d.Name)+" CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"+
+			"CREATE USER IF NOT EXISTS "+user+" IDENTIFIED BY "+sqlString(d.Password)+";"+
+			"ALTER USER "+user+" IDENTIFIED BY "+sqlString(d.Password)+";"+
+			"GRANT ALL PRIVILEGES ON "+myIdent(d.Name)+".* TO "+user+"; FLUSH PRIVILEGES;")
+		return err
+	case "pgsql":
+		// One statement per call: CREATE DATABASE refuses to run inside the
+		// transaction psql wraps a multi-statement -c in.
+		role, err := superSQL(ctx, c, logf, "", "SELECT 1 FROM pg_roles WHERE rolname = "+sqlString(d.User))
+		if err != nil {
+			return err
+		}
+		verb := "CREATE"
+		if role == "1" {
+			verb = "ALTER"
+		}
+		if _, err := superSQL(ctx, c, logf, "", verb+" USER "+pgIdent(d.User)+" WITH PASSWORD "+sqlString(d.Password)+" CREATEDB"); err != nil {
+			return err
+		}
+		exists, err := superSQL(ctx, c, logf, "", "SELECT 1 FROM pg_database WHERE datname = "+sqlString(d.Name))
+		if err != nil || exists == "1" {
+			return err
+		}
+		_, err = superSQL(ctx, c, logf, "", createPGDatabase(d))
+		return err
+	}
+	return fmt.Errorf("unsupported bundled type %q", d.Type)
+}
+
+func createPGDatabase(d config.Database) string {
+	return "CREATE DATABASE " + pgIdent(d.Name) + " OWNER " + pgIdent(d.User) + " TEMPLATE template0 ENCODING 'UTF8'"
+}
+
+// ResetIncomplete empties the Nextcloud database when an earlier setup left
+// tables behind without finishing the install, so maintenance:install can run
+// again. It refuses (and changes nothing) if the database records a completed
+// install: Nextcloud stores core/installedat only after its schema and apps
+// are in place, so its presence means real data, whatever config.php says.
+func ResetIncomplete(ctx context.Context, c config.Config, logf *os.File) error {
+	d := c.Database
+	schema := map[string]string{"mysql": sqlString(d.Name), "pgsql": "'public'"}[d.Type]
+	tables, err := superSQL(ctx, c, logf, d.Name, "SELECT count(*) FROM information_schema.tables WHERE table_schema = "+schema)
+	if err != nil || tables == "0" {
+		return err
+	}
+	hasAppconfig, err := superSQL(ctx, c, logf, d.Name, "SELECT count(*) FROM information_schema.tables WHERE table_schema = "+schema+" AND table_name = 'oc_appconfig'")
 	if err != nil {
 		return err
 	}
-	d := c.Database
-	quote := func(s string) string { return strings.ReplaceAll(s, "'", "''") }
-	var cmd *exec.Cmd
+	if hasAppconfig != "0" {
+		done, err := superSQL(ctx, c, logf, d.Name, "SELECT count(*) FROM oc_appconfig WHERE appid = 'core' AND configkey = 'installedat'")
+		if err != nil {
+			return err
+		}
+		if done != "0" {
+			return fmt.Errorf("database %q holds a completed Nextcloud install, but config.php does not say installed; "+
+				"restore config.php from a backup instead of running setup", d.Name)
+		}
+	}
+	fmt.Fprintf(logf, "database %q has %s tables from an unfinished install; recreating it\n", d.Name, tables)
 	switch d.Type {
 	case "mysql":
-		sql := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"+
-			"CREATE USER IF NOT EXISTS '%s'@'127.0.0.1' IDENTIFIED BY '%s';"+
-			"GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'127.0.0.1'; FLUSH PRIVILEGES;",
-			d.Name, quote(d.User), quote(d.Password), d.Name, quote(d.User))
-		cmd = exec.CommandContext(ctx, filepath.Join(binDir(c), "mariadb.exe"), "-h", "127.0.0.1", "-P", strconv.Itoa(d.Port), "-u", "root", "-e", sql)
-		cmd.Env = append(os.Environ(), "MYSQL_PWD="+super)
+		_, err = superSQL(ctx, c, logf, "", "DROP DATABASE "+myIdent(d.Name)+"; CREATE DATABASE "+myIdent(d.Name)+" CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci")
+		return err
 	case "pgsql":
-		// Separate -c commands: psql runs a multi-statement -c in one
-		// transaction, and CREATE DATABASE refuses to run inside one.
-		createUser := fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s' CREATEDB`, d.User, quote(d.Password))
-		createDB := fmt.Sprintf(`CREATE DATABASE "%s" OWNER "%s" TEMPLATE template0 ENCODING 'UTF8'`, d.Name, d.User)
-		cmd = exec.CommandContext(ctx, filepath.Join(binDir(c), "psql.exe"), "-h", "127.0.0.1", "-p", strconv.Itoa(d.Port), "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-c", createUser, "-c", createDB)
-		cmd.Env = append(os.Environ(), "PGPASSWORD="+super)
-	default:
-		return fmt.Errorf("unsupported bundled type %q", d.Type)
+		if _, err := superSQL(ctx, c, logf, "", "DROP DATABASE "+pgIdent(d.Name)+" WITH (FORCE)"); err != nil {
+			return err
+		}
+		_, err = superSQL(ctx, c, logf, "", createPGDatabase(d))
+		return err
 	}
-	cmd.Stdout, cmd.Stderr = logf, logf
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	return cmd.Run()
+	return fmt.Errorf("unsupported bundled type %q", d.Type)
 }
 
 // DBStopTimeout is how long a bundled server gets to shut down cleanly before
