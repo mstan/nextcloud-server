@@ -127,3 +127,50 @@ func waitFor(t *testing.T, cond func() bool) {
 	}
 	t.Fatal("condition not met within 10s")
 }
+
+type failingApplier struct {
+	fakeApplier
+	applies int
+}
+
+func (f *failingApplier) Apply(_ context.Context, p []string) (ApplyResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.applies++
+	return ApplyResult{Failed: p}, nil
+}
+
+// A path that keeps failing is retried maxAttempts times, then its root is rescanned.
+func TestFailedApplyEscalatesToRescan(t *testing.T) {
+	root := "D:/data"
+	app := &failingApplier{fakeApplier: fakeApplier{root: Root{Kind: "data", Path: root}}}
+	r := ring.New(4096)
+	w := New(Options{Debounce: 10 * time.Millisecond, RetryDelay: 20 * time.Millisecond}, r, app)
+	w.watching[root] = func() {}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		// Run without refreshRoots (no real directory): drive the loop directly.
+		for ctx.Err() == nil {
+			w.mu.Lock()
+			hasRescans, hasPending := len(w.rescans) > 0, len(w.pending) > 0
+			w.mu.Unlock()
+			if hasRescans {
+				w.runRescans(ctx)
+			} else if hasPending {
+				w.flush(ctx)
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
+	w.enqueue(root + "/alice/files/x.txt")
+	waitFor(t, func() bool { app.mu.Lock(); defer app.mu.Unlock(); return len(app.rescans) > 0 })
+	app.mu.Lock()
+	defer app.mu.Unlock()
+	if app.applies != maxAttempts {
+		t.Fatalf("applies = %d, want %d before escalating", app.applies, maxAttempts)
+	}
+	if len(r.Read(ring.Query{Kinds: []string{"watch.escalate"}})) != 1 {
+		t.Fatal("escalation not recorded in ring")
+	}
+}

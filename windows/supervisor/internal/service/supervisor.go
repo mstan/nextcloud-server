@@ -4,10 +4,12 @@ package service
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -154,8 +156,53 @@ func (s *Supervisor) webSpec() proc.Spec {
 		Env:   nc.PHPEnv(s.cfg),
 		Dir:   filepath.FromSlash(s.cfg.PHPDir()),
 		Log:   filepath.Join(filepath.FromSlash(s.cfg.LogDir()), "web.log"),
-		Ready: func(ctx context.Context) error { return dialAll(ctx, SitePorts(s.cfg)) },
+		Ready: func(ctx context.Context) error { return webReady(ctx, s.cfg) },
 	}
+}
+
+// webReady requires every site port to accept connections and, for the first
+// internal-CA or plain-HTTP site, status.php to answer through TLS and PHP:
+// an open port alone does not mean Caddy has its certificate loaded yet.
+// ACME sites are not probed end to end, since issuance may legitimately take
+// a while (or wait for port forwarding).
+func webReady(ctx context.Context, c config.Config) error {
+	if err := dialAll(ctx, SitePorts(c)); err != nil {
+		return err
+	}
+	for _, site := range c.Web.Sites {
+		if site.TLS == "acme" {
+			continue
+		}
+		u, err := url.Parse(site.Addresses[0])
+		if err != nil || u.Host == "" {
+			u, _ = url.Parse("//" + site.Addresses[0])
+		}
+		scheme := "https"
+		if site.TLS == "off" || u.Scheme == "http" {
+			scheme = "http"
+		}
+		port := addrPort(site.Addresses[0], site.TLS, c)
+		target := scheme + "://127.0.0.1:" + strconv.Itoa(port) + "/status.php"
+		client := &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{
+			// Our own internal CA; the probe only checks the server answers.
+			TLSClientConfig: &tls.Config{ServerName: u.Hostname(), InsecureSkipVerify: true},
+		}}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+		if err != nil {
+			return err
+		}
+		req.Host = u.Host
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("status.php: HTTP %d", resp.StatusCode)
+		}
+		return nil
+	}
+	return nil
 }
 
 // SitePorts returns the TCP ports Caddy should be listening on.

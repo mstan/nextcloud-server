@@ -12,6 +12,7 @@ use OC\Files\Cache\Scanner as CacheScanner;
 use OC\Files\SetupManager;
 use OC\Files\Storage\Local;
 use OC\Files\Utils\Scanner;
+use OCP\DB\Exception as DbException;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Files\NotFoundException;
 use OCP\IDBConnection;
@@ -42,7 +43,7 @@ class ChangeApplier {
 
 	/**
 	 * @param list<string> $osPaths
-	 * @return array{scanned: int, ignored: int, retry: list<string>, errors: list<string>}
+	 * @return array{scanned: int, ignored: int, retry: list<string>, failed: list<string>, errors: list<string>}
 	 */
 	public function apply(array $osPaths): array {
 		$home = [];  // uid => [ncPath => osPath]
@@ -59,7 +60,7 @@ class ChangeApplier {
 			}
 		}
 
-		$result = ['scanned' => 0, 'ignored' => $ignored, 'retry' => [], 'errors' => []];
+		$result = ['scanned' => 0, 'ignored' => $ignored, 'retry' => [], 'failed' => [], 'errors' => []];
 		foreach ($home as $uid => $paths) {
 			$this->applyHome((string)$uid, $paths, $result);
 		}
@@ -72,11 +73,11 @@ class ChangeApplier {
 	/**
 	 * Full rescan of one watched root (after a watcher buffer overflow, or nightly).
 	 *
-	 * @return array{scanned: int, ignored: int, retry: list<string>, errors: list<string>}
+	 * @return array{scanned: int, ignored: int, retry: list<string>, failed: list<string>, errors: list<string>}
 	 */
 	public function rescan(string $osRoot): array {
 		$osRoot = RootMap::normalize($osRoot);
-		$result = ['scanned' => 0, 'ignored' => 0, 'retry' => [], 'errors' => []];
+		$result = ['scanned' => 0, 'ignored' => 0, 'retry' => [], 'failed' => [], 'errors' => []];
 		if ($osRoot === $this->roots->dataDir()) {
 			foreach ($this->userManager->getSeenUsers() as $user) {
 				$this->applyHome($user->getUID(), ['/' . $user->getUID() . '/files' => $osRoot . '/' . $user->getUID() . '/files'], $result);
@@ -155,18 +156,45 @@ class ChangeApplier {
 
 		$scanner = new Scanner($user, $this->db, $this->eventDispatcher, $this->logger, $this->setupManager);
 		foreach ($jobs as $path => $recursive) {
-			try {
-				$scanner->scan($path, $recursive ? CacheScanner::SCAN_RECURSIVE : CacheScanner::SCAN_SHALLOW);
-				$result['scanned']++;
-			} catch (LockedException) {
-				$result['retry'][] = $toOs($path);
-			} catch (NotFoundException) {
-				// Raced with another delete; the parent job (always present) covers it.
-			} catch (\Throwable $e) {
-				$result['errors'][] = "$path: " . $e->getMessage();
-				$this->logger->warning('windows_integration: scan failed', ['path' => $path, 'exception' => $e]);
-			}
+			$this->runJob($toOs($path), $result, function () use ($scanner, $path, $recursive): void {
+				try {
+					$scanner->scan($path, $recursive ? CacheScanner::SCAN_RECURSIVE : CacheScanner::SCAN_SHALLOW);
+				} catch (NotFoundException) {
+					// Raced with another delete; the parent job (always present) covers it.
+				}
+			});
 		}
+	}
+
+	/**
+	 * Run one scan job, classifying failures so no change is silently lost:
+	 * contention (file locks, DB lock waits, deadlocks; SQLite reports
+	 * "database is locked" as a lock wait) goes to "retry"; anything else to
+	 * "failed", which the watcher retries a few times before rescanning the root.
+	 *
+	 * @param array{scanned: int, ignored: int, retry: list<string>, failed: list<string>, errors: list<string>} $result
+	 */
+	private function runJob(string $osPath, array &$result, callable $job): void {
+		try {
+			$job();
+			$result['scanned']++;
+		} catch (LockedException) {
+			$result['retry'][] = $osPath;
+		} catch (DbException $e) {
+			if (in_array($e->getReason(), [DbException::REASON_LOCK_WAIT_TIMEOUT, DbException::REASON_DEADLOCK], true)) {
+				$result['retry'][] = $osPath;
+				return;
+			}
+			$this->fail($osPath, $e, $result);
+		} catch (\Throwable $e) {
+			$this->fail($osPath, $e, $result);
+		}
+	}
+
+	private function fail(string $osPath, \Throwable $e, array &$result): void {
+		$result['failed'][] = $osPath;
+		$result['errors'][] = "$osPath: " . $e->getMessage();
+		$this->logger->warning('windows_integration: scan failed', ['path' => $osPath, 'exception' => $e]);
 	}
 
 	/**
@@ -181,7 +209,8 @@ class ChangeApplier {
 		$propagator = $storage->getPropagator();
 		$cache = $storage->getCache();
 		foreach ($jobs as $path => $recursive) {
-			try {
+			$osPath = $root . ($path === '' ? '' : '/' . $path);
+			$this->runJob($osPath, $result, function () use ($scanner, $propagator, $cache, $path, $recursive): void {
 				$propagator->beginBatch();
 				try {
 					$scanner->scan($path, $recursive ? CacheScanner::SCAN_RECURSIVE : CacheScanner::SCAN_SHALLOW,
@@ -193,13 +222,7 @@ class ChangeApplier {
 					$propagator->commitBatch();
 				}
 				$propagator->propagateChange($path, time());
-				$result['scanned']++;
-			} catch (LockedException) {
-				$result['retry'][] = $root . ($path === '' ? '' : '/' . $path);
-			} catch (\Throwable $e) {
-				$result['errors'][] = "$root/$path: " . $e->getMessage();
-				$this->logger->warning('windows_integration: scan failed', ['root' => $root, 'path' => $path, 'exception' => $e]);
-			}
+			});
 		}
 	}
 }
