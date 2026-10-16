@@ -74,6 +74,13 @@ abstract class Office extends ProviderV2 {
 			'--outdir ' . escapeshellarg($outdir),
 			escapeshellarg($absPath),
 		];
+		if (DIRECTORY_SEPARATOR === '\\') {
+			// On Windows escapeshellarg() wraps in "...", so it must enclose the whole
+			// argument; LibreOffice wants a file:///C:/... URL. The binary path
+			// usually contains spaces ("C:\Program Files\...").
+			$parameters[0] = escapeshellarg($parameters[0]);
+			$parameters[1] = escapeshellarg('-env:UserInstallation=file:///' . ltrim(str_replace('\\', '/', $profile), '/'));
+		}
 
 		$cmd = implode(' ', $parameters);
 		exec($cmd, $output, $returnCode);

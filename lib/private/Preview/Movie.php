@@ -315,7 +315,10 @@ class Movie extends ProviderV2 {
 			return null;
 		}
 
-		$binaryType = substr(strrchr($this->binary, '/'), 1);
+		$binaryType = substr(strrchr(\OC\Files\Utils\PathHelper::normalizeOsPath($this->binary), '/'), 1);
+		if (DIRECTORY_SEPARATOR === '\\') {
+			$binaryType = preg_replace('/\.exe$/i', '', $binaryType);
+		}
 
 		if ($binaryType === 'ffmpeg') {
 			if ($this->useHdr($absPath)) {
