@@ -84,7 +84,7 @@ class CSSResourceLocatorTest extends \Test\TestCase {
 		$new_apps_path = sys_get_temp_dir() . '/' . $apps_dirname;
 		$new_apps_path_symlink = $new_apps_path . '_link';
 		mkdir($new_apps_path);
-		symlink($apps_dirname, $new_apps_path_symlink);
+		self::linkDirectory($apps_dirname, $new_apps_path_symlink);
 
 		// Create an app within that path
 		mkdir($new_apps_path . '/' . 'test_css_app');
@@ -117,7 +117,7 @@ class CSSResourceLocatorTest extends \Test\TestCase {
 		$this->assertEquals($expectedFile, $file);
 
 		array_pop(\OC::$APPSROOTS);
-		unlink($new_apps_path_symlink);
+		self::unlinkDirectory($new_apps_path_symlink);
 		$this->rrmdir($new_apps_path);
 	}
 }

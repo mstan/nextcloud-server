@@ -299,6 +299,31 @@ abstract class TestCase extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Link a directory, like symlink(). symlink() needs a privilege on Windows
+	 * that test runs normally lack; a directory junction is creatable by anyone
+	 * and realpath() resolves it the same way.
+	 */
+	protected static function linkDirectory(string $target, string $link): bool {
+		if (@symlink($target, $link)) {
+			return true;
+		}
+		if (DIRECTORY_SEPARATOR !== '\\') {
+			return false;
+		}
+		// Junction targets must be absolute; a relative symlink target is relative to the link's directory.
+		if (!\OC\Files\Utils\PathHelper::isAbsoluteOsPath($target)) {
+			$target = dirname($link) . '/' . $target;
+		}
+		exec('cmd /c mklink /J ' . escapeshellarg(str_replace('/', '\\', $link)) . ' ' . escapeshellarg(str_replace('/', '\\', $target)), $out, $code);
+		return $code === 0;
+	}
+
+	/** Remove a link made by linkDirectory() (Windows removes directory links with rmdir()). */
+	protected static function unlinkDirectory(string $link): bool {
+		return DIRECTORY_SEPARATOR === '\\' && is_dir($link) ? rmdir($link) : unlink($link);
+	}
+
+	/**
 	 * Returns a unique identifier as uniqid() is not reliable sometimes
 	 *
 	 * @param string $prefix
