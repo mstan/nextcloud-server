@@ -109,7 +109,7 @@ class Notify extends StorageAuthBase {
 	}
 
 	private function markParentAsOutdated($mountId, $path, OutputInterface $output, bool $dryRun): void {
-		$parent = ltrim(dirname($path), '/');
+		$parent = ltrim(\OC\Files\Utils\PathHelper::dirname($path), '/');
 		if ($parent === '.') {
 			$parent = '';
 		}
