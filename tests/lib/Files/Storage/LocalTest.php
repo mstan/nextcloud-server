@@ -72,6 +72,19 @@ class LocalTest extends Storage {
 		new Local([]);
 	}
 
+	/**
+	 * symlink() needs a privilege on Windows that tests normally lack; a
+	 * directory junction is creatable by anyone and is resolved by realpath()
+	 * the same way, so it exercises the same containment check.
+	 */
+	private static function link(string $target, string $link): void {
+		if (@symlink($target, $link) || DIRECTORY_SEPARATOR !== '\\') {
+			return;
+		}
+		exec('cmd /c mklink /J ' . escapeshellarg(str_replace('/', '\\', $link)) . ' ' . escapeshellarg(str_replace('/', '\\', $target)), $out, $code);
+		self::assertSame(0, $code, 'could not create a symlink or junction: ' . implode("\n", $out));
+	}
+
 	public function testDisallowSymlinksOutsideDatadir(): void {
 		$this->expectException(ForbiddenException::class);
 
@@ -81,7 +94,7 @@ class LocalTest extends Storage {
 		mkdir($subDir1);
 		mkdir($subDir2);
 
-		symlink($subDir2, $sym);
+		self::link($subDir2, $sym);
 
 		$storage = new Local(['datadir' => $subDir1]);
 
@@ -95,7 +108,7 @@ class LocalTest extends Storage {
 		mkdir($subDir1);
 		mkdir($subDir2);
 
-		symlink($subDir2, $sym);
+		self::link($subDir2, $sym);
 
 		$storage = new Local(['datadir' => $subDir1]);
 
@@ -222,6 +235,9 @@ class LocalTest extends Storage {
 	}
 
 	public function testFopenRestoresUmaskWhenTheWritePathThrows(): void {
+		if (DIRECTORY_SEPARATOR === '\\') {
+			$this->markTestSkipped('Windows has no Unix umask: umask() always reports 0');
+		}
 		$storage = new class(['datadir' => $this->tmpDir]) extends Local {
 			#[\Override]
 			public function __construct(array $parameters) {
