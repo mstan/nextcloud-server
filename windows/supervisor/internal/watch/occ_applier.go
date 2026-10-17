@@ -147,9 +147,12 @@ func (a *OccApplier) call(ctx context.Context, req map[string]any, reply any) er
 	}
 }
 
-func (a *OccApplier) Apply(ctx context.Context, paths []string) (ApplyResult, error) {
+func (a *OccApplier) Apply(ctx context.Context, paths, trees []string) (ApplyResult, error) {
+	if trees == nil {
+		trees = []string{}
+	}
 	var r ApplyResult
-	err := a.call(ctx, map[string]any{"op": "apply", "paths": paths}, &r)
+	err := a.call(ctx, map[string]any{"op": "apply", "paths": paths, "trees": trees}, &r)
 	return r, err
 }
 

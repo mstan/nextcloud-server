@@ -49,13 +49,16 @@ func Ignored(kind, rel string) bool {
 
 // Applier executes scans; implemented by the long-running occ process.
 type Applier interface {
-	Apply(ctx context.Context, paths []string) (ApplyResult, error)
+	// Apply scans paths; trees is the subset that arrived (added or renamed
+	// in) and so may hold descendants Nextcloud has not seen.
+	Apply(ctx context.Context, paths, trees []string) (ApplyResult, error)
 	Rescan(ctx context.Context, root string) (ApplyResult, error)
 	Roots(ctx context.Context) ([]Root, error)
 }
 
 type ApplyResult struct {
 	Scanned int      `json:"scanned"`
+	Skipped int      `json:"skipped"` // already current in the file cache; not scanned
 	Ignored int      `json:"ignored"`
 	Retry   []string `json:"retry"`  // contention: re-apply later, unbounded
 	Failed  []string `json:"failed"` // errors: re-apply up to maxAttempts, then rescan the root
@@ -78,9 +81,9 @@ type Watcher struct {
 	app  Applier
 
 	mu       sync.Mutex
-	noise    map[string]int // root -> ignored top-level events since the last summary
-	attempts map[string]int // path -> consecutive failed applies
-	pending  map[string]struct{}
+	noise    map[string]int  // root -> ignored top-level events since the last summary
+	attempts map[string]int  // path -> consecutive failed applies
+	pending  map[string]bool // path -> arrived as a tree (added or renamed-to)
 	rescans  map[string]struct{}
 	first    time.Time
 	last     time.Time
@@ -101,7 +104,7 @@ func New(opt Options, r *ring.Buffer, app Applier) *Watcher {
 	if opt.RootsEvery == 0 {
 		opt.RootsEvery = time.Minute // cheap (one query on the running applier); new Local mounts are watched within a minute
 	}
-	return &Watcher{opt: opt, ring: r, app: app, noise: map[string]int{}, attempts: map[string]int{}, pending: map[string]struct{}{}, rescans: map[string]struct{}{},
+	return &Watcher{opt: opt, ring: r, app: app, noise: map[string]int{}, attempts: map[string]int{}, pending: map[string]bool{}, rescans: map[string]struct{}{},
 		wake: make(chan struct{}, 1), watching: map[string]context.CancelFunc{}}
 }
 
@@ -112,7 +115,9 @@ func (w *Watcher) poke() {
 	}
 }
 
-func (w *Watcher) enqueue(paths ...string) {
+// enqueue queues paths for the next flush. tree marks paths that arrived
+// (added or renamed in); once a pending path is a tree it stays one.
+func (w *Watcher) enqueue(tree bool, paths ...string) {
 	w.mu.Lock()
 	now := time.Now()
 	if len(w.pending) == 0 {
@@ -120,7 +125,7 @@ func (w *Watcher) enqueue(paths ...string) {
 	}
 	w.last = now
 	for _, p := range paths {
-		w.pending[p] = struct{}{}
+		w.pending[p] = w.pending[p] || tree
 	}
 	w.mu.Unlock()
 	w.poke()
@@ -251,7 +256,7 @@ func (w *Watcher) watchRoot(ctx context.Context, r Root) {
 	backoff := time.Second
 	for ctx.Err() == nil {
 		err := watchDir(ctx, r.Path, func(evs []RawEvent) {
-			var paths []string
+			var paths, trees []string
 			for _, e := range evs {
 				ign := Ignored(r.Kind, e.Rel)
 				if ign && r.Kind == "data" && !strings.Contains(e.Rel, "/") {
@@ -268,11 +273,18 @@ func (w *Watcher) watchRoot(ctx context.Context, r Root) {
 				}
 				w.ring.Add("watch.event", "watch", e.Rel, f)
 				if !ign {
-					paths = append(paths, r.Path+"/"+e.Rel)
+					if e.Action == Added || e.Action == RenamedTo {
+						trees = append(trees, r.Path+"/"+e.Rel)
+					} else {
+						paths = append(paths, r.Path+"/"+e.Rel)
+					}
 				}
 			}
 			if len(paths) > 0 {
-				w.enqueue(paths...)
+				w.enqueue(false, paths...)
+			}
+			if len(trees) > 0 {
+				w.enqueue(true, trees...)
 			}
 		}, func() {
 			w.ring.Add("watch.overflow", "watch", r.Path, nil)
@@ -309,10 +321,9 @@ func (w *Watcher) runRescans(ctx context.Context) {
 	for _, root := range roots {
 		res, err := w.app.Rescan(ctx, root)
 		w.record("watch.rescan", root, res, err)
-		if len(res.Retry) > 0 {
-			w.retryLater(res.Retry)
-		}
-		if err != nil || len(res.Failed) > 0 {
+		// A rescan is never skipped as "already current", so contention is
+		// retried as a rescan of the root, not as a change batch.
+		if err != nil || len(res.Failed) > 0 || len(res.Retry) > 0 {
 			// Retry the whole rescan later; it is the fallback of last resort.
 			time.AfterFunc(time.Minute, func() { w.enqueueRescan(root) })
 		}
@@ -322,25 +333,35 @@ func (w *Watcher) runRescans(ctx context.Context) {
 func (w *Watcher) flush(ctx context.Context) {
 	w.mu.Lock()
 	paths := make([]string, 0, len(w.pending))
-	for p := range w.pending {
+	treeSet := map[string]bool{}
+	for p, tree := range w.pending {
 		paths = append(paths, p)
+		if tree {
+			treeSet[treeKey(p)] = true
+		}
 	}
-	w.pending = map[string]struct{}{}
+	w.pending = map[string]bool{}
 	w.mu.Unlock()
 	sort.Strings(paths)
 	for i := 0; i < len(paths); i += w.opt.BatchSize {
 		batch := paths[i:min(i+w.opt.BatchSize, len(paths))]
-		res, err := w.app.Apply(ctx, batch)
-		w.record("watch.apply", strconv.Itoa(len(batch))+" paths", res, err)
+		var trees []string
+		for _, p := range batch {
+			if treeSet[treeKey(p)] {
+				trees = append(trees, p)
+			}
+		}
+		res, err := w.app.Apply(ctx, batch, trees)
+		w.record("watch.apply", strconv.Itoa(len(batch))+" paths", res, err, map[string]string{"trees": strconv.Itoa(len(trees))})
 		if err != nil {
 			// The applier process failed; keep the paths for the next flush.
-			w.retryLater(batch)
+			w.retryLater(batch, treeSet)
 			continue
 		}
 		if len(res.Retry) > 0 {
-			w.retryLater(res.Retry)
+			w.retryLater(res.Retry, treeSet)
 		}
-		w.handleFailed(batch, res.Failed)
+		w.handleFailed(batch, res.Failed, treeSet)
 	}
 }
 
@@ -348,7 +369,7 @@ func (w *Watcher) flush(ctx context.Context) {
 // whole root is rescanned, so a change is never silently dropped.
 const maxAttempts = 3
 
-func (w *Watcher) handleFailed(batch, failed []string) {
+func (w *Watcher) handleFailed(batch, failed []string, treeSet map[string]bool) {
 	w.mu.Lock()
 	failedSet := make(map[string]bool, len(failed))
 	for _, p := range failed {
@@ -382,21 +403,45 @@ func (w *Watcher) handleFailed(batch, failed []string) {
 		w.ring.Add("watch.escalate", "watch", root, map[string]string{"reason": "apply failed " + strconv.Itoa(maxAttempts) + " times"})
 	}
 	if len(again) > 0 {
-		w.retryLater(again)
+		w.retryLater(again, treeSet)
 	}
 	if len(escalate) > 0 {
 		w.poke()
 	}
 }
 
-func (w *Watcher) retryLater(paths []string) {
-	time.AfterFunc(w.opt.RetryDelay, func() { w.enqueue(paths...) })
+// retryLater re-queues paths, keeping the tree flag of those that were trees
+// (matched case-insensitively, as the applier may report a path in another spelling).
+func (w *Watcher) retryLater(paths []string, treeSet map[string]bool) {
+	var plain, trees []string
+	for _, p := range paths {
+		if treeSet[treeKey(p)] {
+			trees = append(trees, p)
+		} else {
+			plain = append(plain, p)
+		}
+	}
+	time.AfterFunc(w.opt.RetryDelay, func() {
+		if len(plain) > 0 {
+			w.enqueue(false, plain...)
+		}
+		if len(trees) > 0 {
+			w.enqueue(true, trees...)
+		}
+	})
 }
 
-func (w *Watcher) record(kind, msg string, res ApplyResult, err error) {
+func treeKey(p string) string { return strings.ToLower(strings.ReplaceAll(p, "\\", "/")) }
+
+func (w *Watcher) record(kind, msg string, res ApplyResult, err error, extra ...map[string]string) {
 	f := map[string]string{
-		"scanned": strconv.Itoa(res.Scanned), "ignored": strconv.Itoa(res.Ignored),
+		"scanned": strconv.Itoa(res.Scanned), "skipped": strconv.Itoa(res.Skipped), "ignored": strconv.Itoa(res.Ignored),
 		"retry": strconv.Itoa(len(res.Retry)), "failed": strconv.Itoa(len(res.Failed)), "errors": strconv.Itoa(len(res.Errors)), "ms": strconv.Itoa(res.Ms),
+	}
+	for _, e := range extra {
+		for k, v := range e {
+			f[k] = v
+		}
 	}
 	if err != nil {
 		f["error"] = err.Error()
