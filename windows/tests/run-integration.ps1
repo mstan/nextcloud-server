@@ -8,12 +8,12 @@
   The instance lives in a throwaway state directory; nothing is installed as
   a service. Exits with the test suite's status.
 .EXAMPLE
-  powershell -File windows\tests\run-integration.ps1 -Build F:\Projects\nextcloud-build\out\ncwin -Db pgsql
+  powershell -File windows\tests\run-integration.ps1 -Build F:\Projects\nextcloud-build\out\ncwin -Database pgsql
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string]$Build,
-    [ValidateSet('sqlite', 'pgsql', 'mysql')] [string]$Db = 'pgsql',
+    [ValidateSet('sqlite', 'pgsql', 'mysql')] [string]$Database = 'pgsql',
     [int]$HttpPort = 38080,
     [int]$HttpsPort = 38443,
     [string]$StateRoot = (Join-Path $env:TEMP 'ncwin-integration'),
@@ -28,13 +28,13 @@ foreach ($p in $HttpPort, $HttpsPort) {
 }
 $exe = Join-Path $Build 'ncwin.exe'
 if (-not (Test-Path $exe)) { throw "$Build is not an assembled ncwin tree" }
-$t = Join-Path $StateRoot $Db
+$t = Join-Path $StateRoot $Database
 if (Test-Path $t) { Remove-Item -Recurse -Force $t }
 New-Item -ItemType Directory -Force $t | Out-Null
 $lanHost = 'ncwin-integration'
 
 & $exe configure --config "$t\state\ncwin.toml" --install-dir "$Build\." --state-dir "$t\state" --data-dir "$t\data." `
-    --db $Db --http-port $HttpPort --https-port $HttpsPort "--hostnames=$lanHost" '--public-domain=' '--acme-email='
+    --db $Database --http-port $HttpPort --https-port $HttpsPort "--hostnames=$lanHost" '--public-domain=' '--acme-email='
 if ($LASTEXITCODE) { throw 'configure failed' }
 # Every ncwin command below (and the tests' own `ncwin occ`) addresses this
 # instance, never an installed service on the same machine.
