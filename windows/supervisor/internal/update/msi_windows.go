@@ -49,7 +49,9 @@ func (WindowsInstaller) Uninstall(ctx context.Context, productCode, log string) 
 // msiexec runs one unattended Windows Installer operation, which either
 // completes or rolls itself back.
 func msiexec(ctx context.Context, op, target, log string) error {
-	cmd := exec.CommandContext(ctx, "msiexec.exe", op, target, "/qn", "/norestart", "/l*v", log)
+	// "/l*": every action and message, without the per-file verbose trace
+	// that multiplies the time of a 30k-file install.
+	cmd := exec.CommandContext(ctx, "msiexec.exe", op, target, "/qn", "/norestart", "/l*", log)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	err := cmd.Run()
 	var ee *exec.ExitError

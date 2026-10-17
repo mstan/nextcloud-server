@@ -15,10 +15,14 @@
            Version="$(var.Version)" UpgradeCode="268f979b-b084-41e3-8af8-8ce9e726f7fb"
            Scope="perMachine" Compressed="yes" InstallerVersion="500">
 
-    <!-- Remove the old product completely first: the service is stopped (clean
-         database shutdown), files replaced, service started again, and ncwin
-         runs `occ upgrade` before serving the new code. -->
-    <MajorUpgrade Schedule="afterInstallInitialize"
+    <!-- Install over the old product, then remove what it alone owned: files
+         whose content did not change are skipped (component GUIDs follow the
+         file path, so they are shared between versions), which makes an
+         upgrade touch only what a release changed instead of every one of
+         Nextcloud's ~28k files twice. The service is stopped (clean database
+         shutdown), files replaced, the service started again, and ncwin runs
+         `occ upgrade` before serving the new code. -->
+    <MajorUpgrade Schedule="afterInstallExecute"
                   DowngradeErrorMessage="A newer version of ncwin is already installed." />
     <MediaTemplate EmbedCab="yes" MaximumUncompressedMediaSize="1024" CompressionLevel="mszip" />
 
@@ -46,7 +50,18 @@
       <ComponentRef Id="Service" />
       <ComponentRef Id="Firewall" />
       <ComponentRef Id="LongPaths" />
+      <ComponentRef Id="FreshHtaccess" />
     </Feature>
+
+    <!-- Nextcloud's setup appends to nextcloud\.htaccess, and Windows Installer
+         never replaces an unversioned file modified after it was installed.
+         Removing it first makes every install lay down the release's copy
+         (the service account cannot write it afterwards; Caddy ignores it). -->
+    <SetProperty Id="NCWIN_WEBROOT" Value="[INSTALLFOLDER]nextcloud\" Before="RemoveFiles" Sequence="execute" />
+    <Component Id="FreshHtaccess" Directory="INSTALLFOLDER" Guid="3e7c1f52-8d4a-4b6e-9a0f-5c2d7e1b9a43">
+      <RemoveFile Id="RmHtaccess" Property="NCWIN_WEBROOT" Name=".htaccess" On="install" />
+      <RegistryValue Root="HKLM" Key="SOFTWARE\ncwin" Name="FreshHtaccess" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
 
     <ComponentGroup Id="Payload" Directory="INSTALLFOLDER">
       <Files Include="!(bindpath.payload)\**">
