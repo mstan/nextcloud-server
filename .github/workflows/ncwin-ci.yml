@@ -196,6 +196,7 @@ jobs:
           [database]
           type = "sqlite"
           "@ | Set-Content -Encoding UTF8 "$b\ncwin.toml"
+          $env:NCWIN_CONFIG = "$b\ncwin.toml"  # ncwin commands below address this instance
           $env:NCWIN_ADMIN_PASS = 'Ci-Admin-Pass-1'
           & $exe setup --config "$b\ncwin.toml" --no-acl
           if ($LASTEXITCODE) { throw 'setup failed' }

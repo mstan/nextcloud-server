@@ -108,7 +108,7 @@ func (s *Supervisor) Run(ctx context.Context) error {
 	}
 
 	go func() {
-		srv := ipc.Server{Plain: s.handle, Streams: map[string]ipc.StreamHandler{"occ": s.occStream}, AllowSID: s.AllowSID}
+		srv := ipc.Server{Plain: s.handle, Streams: map[string]ipc.StreamHandler{"occ": s.occStream}, AllowSID: s.AllowSID, Pipe: s.cfg.PipeName()}
 		if err := srv.Serve(ctx); err != nil {
 			s.ring.Add("svc.error", "ipc", err.Error(), nil)
 		}

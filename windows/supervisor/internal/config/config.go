@@ -2,6 +2,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -251,6 +253,19 @@ func (c Config) TempDir() string       { return slash(filepath.Join(c.Paths.Stat
 func (c Config) CaddyDataDir() string  { return slash(filepath.Join(c.Paths.StateDir, "caddy")) }
 func (c Config) DBDir() string         { return slash(filepath.Join(c.Paths.StateDir, "db")) }
 func (c Config) DataDir() string       { return slash(c.Paths.DataDir) }
+
+// PipeName is the control pipe of the instance using this state_dir. The
+// installed service (default state_dir) keeps \\.\pipe\ncwin; any other
+// instance (a foreground `ncwin run`, a test) gets a pipe of its own, so
+// several can run on one machine without answering for each other.
+func (c Config) PipeName() string {
+	dir := strings.ToLower(CleanPath(c.Paths.StateDir))
+	if dir == strings.ToLower(CleanPath(Default().Paths.StateDir)) {
+		return `\\.\pipe\ncwin`
+	}
+	h := sha256.Sum256([]byte(dir))
+	return `\\.\pipe\ncwin-` + hex.EncodeToString(h[:6])
+}
 
 // JournalPath is the ring's on-disk copy (see ring.Journal).
 func (c Config) JournalPath() string {
