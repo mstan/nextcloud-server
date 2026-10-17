@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Daily: follow upstream point releases of the major this fork currently
-# tracks (windows/build/deps.lock.json). On a new vNN.x.y tag:
-#   rebase win/NN onto it, pin the new release zip, run ncwin CI, tag
-#   vNN.x.y-win.1 and publish a GitHub release with the assembled build.
-# A conflicting rebase opens an issue instead. A new major opens an issue:
+# Daily: watch upstream releases of the major this fork currently tracks
+# (windows/build/deps.lock.json). A new vNN.x.y tag opens an issue asking for
+# a manual release (windows/build/release.ps1). With the repo variable
+# NCWIN_AUTO_RELEASE = "true" it instead rebases win/NN onto the tag, pins
+# the new release zip, runs ncwin CI, and publishes vNN.x.y-win.1; a
+# conflicting rebase then opens an issue. A new major always opens an issue:
 # moving majors (app max-version, deps) is a reviewed step (UPSTREAM.md).
 name: ncwin upstream tracking
 
@@ -44,18 +45,39 @@ jobs:
           major=${cur%%.*}
           echo "branch=win/$major" >> "$GITHUB_OUTPUT"
           latest=$(git tag -l "v$major.*" | grep -E "^v$major\.[0-9]+\.[0-9]+$" | sort -V | tail -1)
-          next=$(git tag -l "v$((major+1)).0.0")
-          if [ -n "$next" ] && ! gh issue list --state open --search "in:title ncwin: Nextcloud $((major+1)) released" --json number --jq '.[0].number' | grep -q .; then
-            gh issue create --title "ncwin: Nextcloud $((major+1)) released" --body "Upstream tagged v$((major+1)).0.0. Follow windows/UPSTREAM.md \"New major\" to create win/$((major+1))."
-          fi
+          if [ -n "$(git tag -l "v$((major+1)).0.0")" ]; then echo "next_major=$((major+1))" >> "$GITHUB_OUTPUT"; fi
           if [ "$latest" = "v$cur" ]; then echo "up to date at v$cur"; exit 0; fi
           echo "new_tag=$latest" >> "$GITHUB_OUTPUT"
           echo "new upstream release: $latest (fork is on v$cur)"
+      - name: Open issues for what needs a hand
+        # One issue per upstream release (none if one is already open). A new
+        # major always needs a hand; a point release does unless the repo
+        # variable NCWIN_AUTO_RELEASE is "true" (then the jobs below rebase,
+        # build and release it).
+        if: steps.detect.outputs.next_major != '' || (steps.detect.outputs.new_tag != '' && vars.NCWIN_AUTO_RELEASE != 'true')
         env:
           GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.detect.outputs.next_major }}
+          NEW: ${{ steps.detect.outputs.new_tag }}
+          AUTO: ${{ vars.NCWIN_AUTO_RELEASE }}
+        run: |
+          cur="v$(jq -r .nextcloud.version windows/build/deps.lock.json)"
+          open_issue() {
+            if gh issue list --state open --search "in:title \"$1\"" --json title --jq '.[].title' | grep -qxF "$1"; then
+              echo "already open: $1"
+            else
+              gh issue create --title "$1" --body "$2"
+            fi
+          }
+          if [ -n "$NEXT" ]; then
+            open_issue "ncwin: Nextcloud $NEXT released" "Upstream tagged v$NEXT.0.0. Follow windows/UPSTREAM.md \"New major\" to create win/$NEXT, then release it with windows/build/release.ps1."
+          fi
+          if [ -n "$NEW" ] && [ "$AUTO" != "true" ]; then
+            open_issue "ncwin: Nextcloud ${NEW#v} released" "Upstream tagged $NEW (this fork is on $cur). Follow windows/UPSTREAM.md \"Point release\": rebase, mirror and pin the release zip, then \`windows/build/release.ps1 -WinBuild 1 -Publish\`. Installed servers pick the release up with their daily update task."
+          fi
 
       - name: Rebase win branch onto new release
-        if: steps.detect.outputs.new_tag != ''
+        if: steps.detect.outputs.new_tag != '' && vars.NCWIN_AUTO_RELEASE == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           NEW: ${{ steps.detect.outputs.new_tag }}
@@ -109,7 +131,7 @@ jobs:
 
   ci:
     needs: track
-    if: needs.track.outputs.new_tag != ''
+    if: needs.track.outputs.new_tag != '' && vars.NCWIN_AUTO_RELEASE == 'true'
     uses: ./.github/workflows/ncwin-ci.yml
     secrets: inherit
     with:
@@ -119,7 +141,7 @@ jobs:
 
   release:
     needs: [track, ci]
-    if: needs.track.outputs.new_tag != ''
+    if: needs.track.outputs.new_tag != '' && vars.NCWIN_AUTO_RELEASE == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
