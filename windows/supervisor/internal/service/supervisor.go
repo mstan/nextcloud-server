@@ -26,6 +26,7 @@ import (
 	"github.com/mstan/nextcloud-server/windows/supervisor/internal/render"
 	"github.com/mstan/nextcloud-server/windows/supervisor/internal/ring"
 	"github.com/mstan/nextcloud-server/windows/supervisor/internal/watch"
+	"github.com/mstan/nextcloud-server/windows/supervisor/internal/weblog"
 )
 
 // Supervisor owns every child and background loop for one install.
@@ -115,6 +116,11 @@ func (s *Supervisor) Run(ctx context.Context) error {
 	}()
 
 	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		weblog.Tail(ctx, filepath.Join(filepath.FromSlash(s.cfg.LogDir()), "access.log"), s.ring)
+	}()
 	// Children stop when their own context is cancelled; web must stop before
 	// the database, so each tier gets its own context cancelled in order.
 	tiers := [][]proc.Spec{}
