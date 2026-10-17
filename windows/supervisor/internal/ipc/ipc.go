@@ -19,9 +19,13 @@ import (
 
 const PipeName = `\\.\pipe\ncwin`
 
-// pipeName is the pipe actually used; tests point it elsewhere so they never
-// meet a running service.
+// pipeName is the pipe clients dial (see UsePipe) and servers without a Pipe
+// of their own listen on; tests point it elsewhere so they never meet a
+// running service.
 var pipeName = PipeName
+
+// UsePipe makes Call dial name (the instance's config.PipeName).
+func UsePipe(name string) { pipeName = name }
 
 // SYSTEM and BUILTIN\Administrators get full access; nobody else.
 const sddl = "D:P(A;;GA;;;SY)(A;;GA;;;BA)"
@@ -56,6 +60,8 @@ type Server struct {
 	// AllowSID, if set, is also granted access. Foreground (`ncwin run`)
 	// sessions use it so a non-elevated developer can reach their own pipe.
 	AllowSID string
+	// Pipe to listen on; "" uses the package default.
+	Pipe string
 }
 
 // Serve accepts connections until ctx is done.
@@ -72,9 +78,13 @@ func (s Server) Serve(ctx context.Context) error {
 	if s.AllowSID != "" && s.AllowSID != self {
 		sd += "(A;;GA;;;" + s.AllowSID + ")"
 	}
-	l, err := winio.ListenPipe(pipeName, &winio.PipeConfig{SecurityDescriptor: sd, InputBufferSize: 64 << 10, OutputBufferSize: 64 << 10})
+	name := s.Pipe
+	if name == "" {
+		name = pipeName
+	}
+	l, err := winio.ListenPipe(name, &winio.PipeConfig{SecurityDescriptor: sd, InputBufferSize: 64 << 10, OutputBufferSize: 64 << 10})
 	if err != nil {
-		return fmt.Errorf("listen %s: %w", pipeName, err)
+		return fmt.Errorf("listen %s: %w", name, err)
 	}
 	go func() { <-ctx.Done(); l.Close() }()
 	for {

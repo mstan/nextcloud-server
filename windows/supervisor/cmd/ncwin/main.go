@@ -38,7 +38,15 @@ import (
 	"github.com/mstan/nextcloud-server/windows/supervisor/internal/update"
 )
 
-const defaultConfig = `C:\ProgramData\ncwin\ncwin.toml`
+// defaultConfig is the installed service's ncwin.toml, or the one named by
+// NCWIN_CONFIG, which selects another instance (a foreground `ncwin run`, a
+// test) for every command.
+func defaultConfig() string {
+	if p := os.Getenv("NCWIN_CONFIG"); p != "" {
+		return p
+	}
+	return `C:\ProgramData\ncwin\ncwin.toml`
+}
 
 // version is set by the build (-X main.version=...).
 var version = "dev"
@@ -46,7 +54,7 @@ var version = "dev"
 func main() {
 	if isSvc, err := svc.IsWindowsService(); err == nil && isSvc {
 		fs := flag.NewFlagSet("service", flag.ExitOnError)
-		cfg := fs.String("config", defaultConfig, "")
+		cfg := fs.String("config", defaultConfig(), "")
 		_ = fs.Parse(os.Args[1:])
 		if err := service.RunService(*cfg); err != nil {
 			os.Exit(1)
@@ -57,6 +65,13 @@ func main() {
 		usage()
 	}
 	cmd, args := os.Args[1], os.Args[2:]
+	// Commands talking to a running instance dial the pipe its config names.
+	switch cmd {
+	case "status", "shutdown", "events", "occ", "grant-path":
+		if c, err := config.Load(defaultConfig()); err == nil {
+			ipc.UsePipe(c.PipeName())
+		}
+	}
 	var err error
 	switch cmd {
 	case "install":
@@ -114,7 +129,7 @@ func usage() {
 
 func configFlag(name string, args []string) string {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
-	cfg := fs.String("config", defaultConfig, "path to ncwin.toml")
+	cfg := fs.String("config", defaultConfig(), "path to ncwin.toml")
 	_ = fs.Parse(args)
 	return *cfg
 }
@@ -176,8 +191,11 @@ func events(args []string) error {
 	limit := fs.Int("limit", 0, "maximum events")
 	asJSON := fs.Bool("json", false, "print JSON lines")
 	fromJournal := fs.Bool("journal", false, "read the on-disk journal (all history kept) instead of the running service")
-	cfgPath := fs.String("config", defaultConfig, "path to ncwin.toml (for the journal)")
+	cfgPath := fs.String("config", defaultConfig(), "path to ncwin.toml (selects the instance and its journal)")
 	_ = fs.Parse(args)
+	if c, err := config.Load(*cfgPath); err == nil {
+		ipc.UsePipe(c.PipeName())
+	}
 	q := ring.Query{FromSeq: *from, Limit: *limit}
 	if *since > 0 {
 		q.Since = time.Now().Add(-*since)
@@ -256,7 +274,7 @@ func grantPath(args []string) error {
 // process command line visible to other users.
 func runSetup(args []string) error {
 	fs := flag.NewFlagSet("setup", flag.ExitOnError)
-	cfgPath := fs.String("config", defaultConfig, "path to ncwin.toml")
+	cfgPath := fs.String("config", defaultConfig(), "path to ncwin.toml")
 	adminUser := fs.String("admin-user", "admin", "Nextcloud admin user to create")
 	passEnv := fs.String("admin-pass-env", "NCWIN_ADMIN_PASS", "environment variable holding the admin password")
 	noACL := fs.Bool("no-acl", false, "skip granting the service account access (developer installs)")
@@ -305,7 +323,7 @@ func runSetup(args []string) error {
 //	ncwin ca trust               add it to this machine's Trusted Root store (elevated)
 func ca(args []string) error {
 	fs := flag.NewFlagSet("ca", flag.ExitOnError)
-	cfgPath := fs.String("config", defaultConfig, "path to ncwin.toml")
+	cfgPath := fs.String("config", defaultConfig(), "path to ncwin.toml")
 	_ = fs.Parse(args)
 	c, err := config.Load(*cfgPath)
 	if err != nil {
@@ -343,7 +361,7 @@ func (scmService) Start() error { return service.Start() }
 // state_dir. --auto is what the daily scheduled task runs.
 func runUpdate(args []string) error {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
-	cfgPath := fs.String("config", defaultConfig, "path to ncwin.toml")
+	cfgPath := fs.String("config", defaultConfig(), "path to ncwin.toml")
 	from := fs.String("from", "", "release .zip or .msi path or https URL (default: latest GitHub release)")
 	sum := fs.String("sha256", "", "SHA-256 of --from")
 	extOK := fs.Bool("external-db-backed-up", false, "confirm an external database has been backed up")
@@ -476,7 +494,7 @@ func serviceConfig(args []string) error {
 // passwords are generated). An existing file is left untouched.
 func runConfigure(args []string) error {
 	fs := flag.NewFlagSet("configure", flag.ExitOnError)
-	cfgPath := fs.String("config", defaultConfig, "ncwin.toml to write")
+	cfgPath := fs.String("config", defaultConfig(), "ncwin.toml to write")
 	o := setup.ConfigureOptions{}
 	fs.StringVar(&o.InstallDir, "install-dir", "", "")
 	fs.StringVar(&o.StateDir, "state-dir", `C:\ProgramData\ncwin`, "")

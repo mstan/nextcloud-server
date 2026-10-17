@@ -31,3 +31,20 @@ func TestSiteHostsAndCLIURL(t *testing.T) {
 		}
 	}
 }
+
+func TestPipeName(t *testing.T) {
+	c := Default()
+	if got := c.PipeName(); got != `\\.\pipe\ncwin` {
+		t.Fatalf("installed service pipe %q", got)
+	}
+	c.Paths.StateDir = `C:\ProgramData\NCWIN\` // same directory, other spelling
+	if got := c.PipeName(); got != `\\.\pipe\ncwin` {
+		t.Fatalf("same state_dir, other spelling: %q", got)
+	}
+	c.Paths.StateDir = `D:\tmp\a\state`
+	a := c.PipeName()
+	c.Paths.StateDir = `D:\tmp\b\state`
+	if b := c.PipeName(); a == b || a == `\\.\pipe\ncwin` || len(a) != len(`\\.\pipe\ncwin-`)+12 {
+		t.Fatalf("instance pipes %q and %q", a, b)
+	}
+}
