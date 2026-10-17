@@ -191,7 +191,7 @@ jobs:
           http_port  = 18080
           https_port = 18443
           [[web.site]]
-          addresses = ["https://localhost:18443"]
+          addresses = ["https://localhost:18443", "https://ncwin-ci:18443"]
           tls = "internal"
           [database]
           type = "sqlite"
@@ -206,7 +206,7 @@ jobs:
             Start-Sleep 2
           }
           Push-Location windows/tests
-          $env:NCWIN_URL = 'https://localhost:18443'; $env:NCWIN_USER = 'admin'; $env:NCWIN_PASS = 'Ci-Admin-Pass-1'; $env:NCWIN_DATA = "$b\data"; $env:NCWIN_EXE = $exe
+          $env:NCWIN_URL = 'https://localhost:18443'; $env:NCWIN_USER = 'admin'; $env:NCWIN_PASS = 'Ci-Admin-Pass-1'; $env:NCWIN_DATA = "$b\data"; $env:NCWIN_EXE = $exe; $env:NCWIN_LAN_HOST = 'ncwin-ci'
           go test ./... -count=1 -v -timeout 40m
           $code = $LASTEXITCODE
           Pop-Location
