@@ -52,14 +52,21 @@ it to `deps` under a versioned, hash-suffixed name and update the lock.
 ```sh
 git fetch upstream --tags
 git rebase --onto v35.0.3 v35.0.2 win/35
-# bump windows/build/deps.lock.json nextcloud.version/url/sha256
+# mirror the release zip on the deps release and pin it (see "Pinned dependencies"):
+#   nextcloud.version, url (the deps copy), sha256, upstream_url in windows/build/deps.lock.json
 #   sha256: https://download.nextcloud.com/server/releases/nextcloud-35.0.3.zip.sha256
-powershell -File windows/build/assemble.ps1 -Clean
-# run windows/tests, then tag v35.0.3-win.1
+powershell -File windows/build/release.ps1 -WinBuild 1            # build and run every gate
+powershell -File windows/build/release.ps1 -WinBuild 1 -Publish   # then tag, push and release
 ```
 
-The daily `upstream-track` workflow does this automatically and opens an
-issue when the rebase conflicts.
+`release.ps1` runs the same gates as CI (Go tests, Windows lint, `php -l`,
+upstream PHPUnit, the integration suite on the signed build) and builds the
+MSI, zip and checksums; `-Publish` creates the GitHub release that installed
+servers' daily update task installs. A rebuild of the same Nextcloud
+version takes the next `-WinBuild`.
+
+The GitHub workflows (`ncwin CI`, `upstream tracking`, `canary`) can do this
+automatically but are disabled for now; releases are built by hand.
 
 ## New major (e.g. 36.0.0)
 
