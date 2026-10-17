@@ -434,3 +434,29 @@ func TestDeleteThenRecreate(t *testing.T) {
 		e.expect(t, 204, "DELETE", d+"/again", nil, nil)
 	}
 }
+
+// Nextcloud answers under every host name configured in ncwin.toml, not
+// only the one it was installed through (maintenance:install trusts only
+// that one; ncwin's ncwin.config.php adds the rest). Needs NCWIN_LAN_HOST, a
+// configured site host name other than the one in NCWIN_URL.
+func TestConfiguredHostIsTrusted(t *testing.T) {
+	e := setup(t)
+	host := os.Getenv("NCWIN_LAN_HOST")
+	if host == "" {
+		t.Skip("NCWIN_LAN_HOST not set")
+	}
+	req, err := http.NewRequest("GET", strings.TrimRight(e.base, "/")+"/status.php", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Host = host
+	resp, err := e.c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 || !strings.Contains(string(b), `"installed":true`) {
+		t.Fatalf("status.php as %s = %d: %.300s", host, resp.StatusCode, b)
+	}
+}
