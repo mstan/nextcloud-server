@@ -72,7 +72,7 @@ func NextcloudConfig(c config.Config) []byte {
 			domains = append(domains, h)
 		}
 	}
-	return PHPConfig(map[string]any{
+	return PHPConfig("Written by ncwin from ncwin.toml at every start; edit ncwin.toml instead.", map[string]any{
 		"trusted_domains":   domains,
 		"overwrite.cli.url": c.CLIURL(),
 	})
