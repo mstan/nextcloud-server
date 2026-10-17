@@ -47,6 +47,9 @@ function RepoGit { & git.exe -C $repo @args; Native "git $($args -join ' ')" }
 # Native stderr redirected under ErrorActionPreference=Stop is fatal in Windows
 # PowerShell; probes whose failure is an answer run with Continue.
 function Probe([scriptblock]$b) { $ErrorActionPreference = 'Continue'; & $b }
+# The Windows launcher, when present: the first `python` on PATH can be an
+# MSYS build that mangles Windows paths.
+function Python { if (Get-Command py -ErrorAction SilentlyContinue) { & py -3 @args } else { & python @args } }
 
 Step "preflight $tag"
 $branch = (RepoGit rev-parse --abbrev-ref HEAD)
@@ -67,7 +70,7 @@ Push-Location (Join-Path $repo 'windows\tests')
 try { & go vet ./...; Native 'go vet (integration tests)' } finally { Pop-Location }
 
 Step 'Windows lint'
-& python (Join-Path $repo 'windows\build\lint_windows.py'); Native 'lint_windows.py'
+Python (Join-Path $repo 'windows\build\lint_windows.py'); Native 'lint_windows.py'
 
 Step 'assemble (signed)'
 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'assemble.ps1') `
@@ -116,7 +119,7 @@ if (-not $SkipUpstreamTests) {
         New-Item -ItemType Directory $junit | Out-Null
         $sh = Join-Path $env:ProgramFiles 'Git\bin\sh.exe'
         & $sh windows/tests/phpunit-windows.sh ($php -replace '\\', '/') ($junit -replace '\\', '/')
-        & python windows/tests/junit_check.py $junit; Native 'upstream PHPUnit (junit_check)'
+        Python windows/tests/junit_check.py $junit; Native 'upstream PHPUnit (junit_check)'
     } finally {
         Pop-Location
         Remove-Item Env:PHPRC, Env:OPENSSL_CONF -ErrorAction SilentlyContinue
