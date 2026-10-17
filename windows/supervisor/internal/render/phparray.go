@@ -1,5 +1,4 @@
-// Package setup provisions a fresh ncwin install.
-package setup
+package render
 
 import (
 	"fmt"
@@ -45,7 +44,7 @@ func phpLiteral(v any, indent string) string {
 	panic(fmt.Sprintf("phpLiteral: unsupported %T", v))
 }
 
-// configPHP renders a Nextcloud config.php.
-func configPHP(values map[string]any) []byte {
+// PHPConfig renders a Nextcloud config file (config.php or *.config.php).
+func PHPConfig(values map[string]any) []byte {
 	return []byte("<?php\n// Pre-seeded by `ncwin setup`; Nextcloud manages this file from here on.\n$CONFIG = " + phpLiteral(values, "") + ";\n")
 }

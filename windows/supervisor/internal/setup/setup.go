@@ -1,10 +1,10 @@
+// Package setup provisions a fresh ncwin install.
 package setup
 
 import (
 	"context"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/exec"
 	"os/user"
@@ -43,59 +43,15 @@ func Installed(c config.Config) bool {
 	return err == nil && strings.Contains(string(b), "'installed' => true")
 }
 
-// SiteHosts returns the host names of every configured site, without ports.
-func SiteHosts(c config.Config) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, s := range c.Web.Sites {
-		for _, a := range s.Addresses {
-			u, err := url.Parse(a)
-			if err != nil || u.Host == "" {
-				u, err = url.Parse("//" + a)
-			}
-			if err != nil {
-				continue
-			}
-			if h := u.Hostname(); h != "" && !seen[h] {
-				seen[h] = true
-				out = append(out, h)
-			}
-		}
-	}
-	return out
-}
-
-// CLIURL is overwrite.cli.url: the first configured site, used for links in
-// mails and background jobs.
-func CLIURL(c config.Config) string {
-	a := c.Web.Sites[0].Addresses[0]
-	if !strings.Contains(a, "://") {
-		if c.Web.Sites[0].TLS == "off" {
-			a = "http://" + a
-		} else {
-			a = "https://" + a
-		}
-	}
-	return strings.TrimRight(a, "/")
-}
-
 // SeedConfig is the config.php written before maintenance:install, holding
 // every Windows-specific default so the installer itself runs with them.
 func SeedConfig(c config.Config) map[string]any {
-	domains := []any{"localhost"}
-	for _, h := range SiteHosts(c) {
-		if h != "localhost" {
-			domains = append(domains, h)
-		}
-	}
 	return map[string]any{
 		"datadirectory": c.DataDir(),
 		"apps_paths": []any{
 			map[string]any{"path": c.WebRoot() + "/apps", "url": "/apps", "writable": false},
 			map[string]any{"path": c.CustomAppsDir(), "url": "/custom_apps", "writable": true},
 		},
-		"trusted_domains":      domains,
-		"overwrite.cli.url":    CLIURL(c),
 		"htaccess.RewriteBase": "/",
 		"memcache.local":       `\OC\Memcache\APCu`,
 		"tempdirectory":        c.TempDir(),
@@ -206,7 +162,7 @@ func Run(ctx context.Context, c config.Config, o Options) error {
 	}
 	if !installed {
 		logf("writing %s", cfgPHP)
-		if err := os.WriteFile(cfgPHP, configPHP(SeedConfig(c)), 0o640); err != nil {
+		if err := os.WriteFile(cfgPHP, render.PHPConfig(SeedConfig(c)), 0o640); err != nil {
 			return err
 		}
 	}
@@ -257,7 +213,7 @@ func Run(ctx context.Context, c config.Config, o Options) error {
 			}
 		}
 	}
-	logf("setup complete: %s", CLIURL(c))
+	logf("setup complete: %s", c.CLIURL())
 	return nil
 }
 
