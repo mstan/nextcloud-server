@@ -1,8 +1,9 @@
 {
   "nextcloud": {
     "version": "35.0.2",
-    "url": "https://download.nextcloud.com/server/releases/nextcloud-35.0.2.zip",
-    "sha256": "2f1dcec6a7cdab70346e80a823ccaaa2001a6085013d9f2ae0a2606fa38c2835"
+    "url": "https://github.com/mstan/nextcloud-server/releases/download/deps/nextcloud-35.0.2.zip",
+    "sha256": "2f1dcec6a7cdab70346e80a823ccaaa2001a6085013d9f2ae0a2606fa38c2835",
+    "upstream_url": "https://download.nextcloud.com/server/releases/nextcloud-35.0.2.zip"
   },
   "frankenphp": {
     "version": "1.13.0",
@@ -28,8 +29,9 @@
   },
   "mariadb": {
     "version": "11.8.9",
-    "url": "https://archive.mariadb.org/mariadb-11.8.9/winx64-packages/mariadb-11.8.9-winx64.zip",
+    "url": "https://github.com/mstan/nextcloud-server/releases/download/deps/mariadb-11.8.9-winx64.zip",
     "sha256": "830c46727d9278eae212ae3eca44eeb9e71b2a68704e95f344a64fba7b1963f5",
+    "upstream_url": "https://archive.mariadb.org/mariadb-11.8.9/winx64-packages/mariadb-11.8.9-winx64.zip",
     "strip": [
       "include",
       "bin\\*.pdb",
@@ -42,7 +44,8 @@
   },
   "pgsql": {
     "version": "17.11",
-    "url": "https://get.enterprisedb.com/postgresql/postgresql-17.11-1-windows-x64-binaries.zip",
+    "url": "https://github.com/mstan/nextcloud-server/releases/download/deps/postgresql-17.11-1-windows-x64-binaries.zip",
+    "upstream_url": "https://get.enterprisedb.com/postgresql/postgresql-17.11-1-windows-x64-binaries.zip",
     "sha256": "6eabdf00d2893713b75db4336a23c3fdf505f056e217ec6e2e95d901750cfea3",
     "note": "EDB publishes no checksum; pinned from the first download (2026-10-15)",
     "strip": [

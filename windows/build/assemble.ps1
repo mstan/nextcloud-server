@@ -59,8 +59,22 @@ function Get-Pinned([string]$Url, [string]$Sha256) {
     Write-Host "download $Url"
     $tmp = "$dest.download"
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $wc = New-Object Net.WebClient
-    $wc.DownloadFile($Url, $tmp)
+    # Download hosts rate-limit shared CI addresses (HTTP 429) and have
+    # transient outages; back off and retry, honouring Retry-After.
+    for ($attempt = 1; ; $attempt++) {
+        try {
+            (New-Object Net.WebClient).DownloadFile($Url, $tmp)
+            break
+        } catch {
+            $resp = $_.Exception.InnerException.Response
+            $code = if ($resp) { [int]$resp.StatusCode } else { 0 }
+            if ($attempt -ge 6 -or ($code -ne 0 -and $code -ne 429 -and $code -lt 500)) { throw }
+            $wait = 15 * [math]::Pow(2, $attempt - 1)
+            if ($resp -and $resp.Headers['Retry-After'] -match '^\d+$') { $wait = [math]::Max($wait, [int]$resp.Headers['Retry-After']) }
+            Write-Warning "download $Url failed ($($_.Exception.Message)); retry $attempt in $wait s"
+            Start-Sleep -Seconds $wait
+        }
+    }
     $actual = (Get-FileHash -Algorithm SHA256 $tmp).Hash
     if ($actual -ne $Sha256.ToUpper()) {
         Remove-Item $tmp

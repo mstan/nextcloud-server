@@ -22,7 +22,7 @@ names and an optional public domain, then installs the `ncwin` service, runs
 change it after the first login. Unattended:
 
 ```
-msiexec /i ncwin-35.0.2-win.2.msi /qn NCWIN_DATADIR=D:\NextcloudData\ NCWIN_DB=pgsql ^
+msiexec /i ncwin-35.0.2-win.3.msi /qn NCWIN_DATADIR=D:\NextcloudData\ NCWIN_DB=pgsql ^
         NCWIN_HTTPSPORT=443 NCWIN_HOSTNAMES=nas,192.168.1.20 NCWIN_DOMAIN=cloud.example.com NCWIN_ACMEEMAIL=me@example.com
 ```
 
