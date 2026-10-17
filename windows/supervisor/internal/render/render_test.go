@@ -35,6 +35,8 @@ func TestCaddyfile(t *testing.T) {
 		"email a@b.c",
 		"skip_install_trust",
 		"persist_config off",
+		`output file "C:/ProgramData/ncwin/log/access.log"`,
+		"format json",
 		`root * "C:/ProgramData/ncwin"`, // custom_apps assets
 	} {
 		if !strings.Contains(s, want) {

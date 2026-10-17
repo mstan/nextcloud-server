@@ -26,6 +26,15 @@
 	root * "{{.WebRoot}}"
 	encode zstd gzip
 
+	# JSON access log; ncwin follows it into the event ring as web.req.
+	log {
+		output file "{{.LogDir}}/access.log" {
+			roll_size 20MiB
+			roll_keep 2
+		}
+		format json
+	}
+
 	request_body {
 		max_size {{.UploadMax}}
 	}
