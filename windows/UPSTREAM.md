@@ -101,7 +101,7 @@ everything. The weekly canary should already have surfaced conflicts.
 | Local storage root mode | `Local::getSourcePath()` | cross-storage moves use `Local(['datadir' => '/'])` with `C:/...` paths |
 | Local case conflicts | `Local` mkdir/fopen/touch/file_put_contents/rename/copy | NTFS resolves `a.txt` to an existing `A.txt`: silent overwrite + duplicate cache rows; now `ForbiddenException` (403) |
 | sharing violations | `Local::unlink()`, `Local::rename()` | AV/indexer handles block delete/rename briefly; bounded retry |
-| junctions | `OCP\Files::rmdirr()`, `Local::rmdir()` | directory links need `rmdir()` on Windows; `is_dir()` is false for a junction, so `rmdirr()` falls back from `unlink()` |
+| junctions | `OCP\Files::rmdirr()`, `Local::rmdir()` | directory links need `rmdir()` on Windows; `is_dir()` is false for a junction, so `rmdirr()` falls back from `unlink()`; it also clears the realpath cache first (stale entries made directory listings fail) |
 | data dir / apps_paths normalisation | `Setup.php`, `OC.php`, setup checks, `JSConfigHelper` | backslashed config values never match `/`-joined paths |
 | previews | `Preview/Movie.php`, `Preview/Office.php`, `Preview/Storage/LocalPreviewStorage.php` | `ffmpeg.exe` detection, LibreOffice `file:///C:/` URL + quoting, `\` iterator paths |
 | misc | `Log/File.php` (chmod per line), `Type/Detection.php` (`test -f`), `SchemaChecker.php` (regex), `PreviewCommand.php` | |
