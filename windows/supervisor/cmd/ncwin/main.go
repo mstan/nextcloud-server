@@ -462,6 +462,13 @@ func serviceConfig(args []string) error {
 	if err := service.Configure(); err != nil {
 		return err
 	}
+	// Existing installs (upgrades); a fresh one has no ncwin.toml yet, and
+	// `ncwin setup` protects its state directory.
+	if c, err := config.Load(cfgPath); err == nil {
+		if err := setup.ProtectStateDir(c.Paths.StateDir, service.Account, os.Stdout); err != nil {
+			return err
+		}
+	}
 	return service.InstallUpdateTask(cfgPath)
 }
 
