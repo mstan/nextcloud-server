@@ -180,7 +180,7 @@ $log = if ($prev) { & git.exe -C $repo log --format='- %s' "$prev..$tag" } else 
 @("Nextcloud $($lock.nextcloud.version) for Windows.", '',
     'Install or upgrade: run the .msi (elevated). Installed servers update themselves with their daily update task.', '',
     "Changes since $(if ($prev) { $prev } else { 'the start' }):") + $log | Set-Content -Encoding UTF8 $notes
-& gh release create $tag (Get-ChildItem $rel -Exclude notes.md | ForEach-Object FullName) -R mstan/nextcloud-server `
+& gh release create $tag (Get-ChildItem $rel -Exclude notes.md, *.wixpdb | ForEach-Object FullName) -R mstan/nextcloud-server `
     --verify-tag --latest --title "ncwin $($tag.TrimStart('v'))" --notes-file $notes
 Native 'gh release create'
 "published $tag"
