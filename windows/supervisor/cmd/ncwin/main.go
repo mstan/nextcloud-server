@@ -349,6 +349,7 @@ func runUpdate(args []string) error {
 	extOK := fs.Bool("external-db-backed-up", false, "confirm an external database has been backed up")
 	auto := fs.Bool("auto", false, "install the latest release only if it is newer (same Nextcloud major unless [update] majors)")
 	check := fs.Bool("check", false, "report what an update would install, and change nothing")
+	force := fs.Bool("force", false, "install the latest release even if it is not newer than the running one")
 	relocated := fs.Bool("relocated", false, "internal: running from the relocated copy")
 	_ = fs.Parse(args)
 	c, err := config.Load(*cfgPath)
@@ -412,7 +413,7 @@ func runUpdate(args []string) error {
 	var out strings.Builder
 	err = update.Run(ctx, c, scmService{}, update.Options{
 		Source: *from, SHA256: *sum, Repo: c.Update.Repo, Current: version,
-		Auto: *auto, AllowMajor: c.Update.Majors, DryRun: *check,
+		Auto: *auto, AllowMajor: c.Update.Majors, DryRun: *check, Force: *force,
 		ExternalDBBackedUp: *extOK, Packages: update.WindowsInstaller{},
 		Log: io.MultiWriter(log, &out),
 	})

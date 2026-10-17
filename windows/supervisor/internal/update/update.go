@@ -69,6 +69,8 @@ type Options struct {
 	AllowMajor bool
 	// DryRun reports what would be installed, and changes nothing.
 	DryRun bool
+	// Force installs the latest release even if it is not newer.
+	Force bool
 	// ExternalDBBackedUp acknowledges that an external database (which ncwin
 	// cannot snapshot) has been backed up by the operator.
 	ExternalDBBackedUp bool
@@ -230,13 +232,20 @@ func (u *updater) choose(ctx context.Context, msi bool) (src, sum, want string, 
 	if err != nil {
 		return "", "", "", fmt.Errorf("latest release: %w", err)
 	}
-	if u.o.Auto {
-		cur, err := ParseRelease(u.o.Current)
-		if err != nil {
-			return "", "", "", fmt.Errorf("automatic updates need a release build: %w", err)
-		}
+	cur, curErr := ParseRelease(u.o.Current)
+	switch {
+	case u.o.Auto && curErr != nil:
+		return "", "", "", fmt.Errorf("automatic updates need a release build: %w", curErr)
+	case u.o.Auto:
 		if ok, why := Decide(cur, latest, u.o.AllowMajor); !ok {
 			u.logf("%s", why)
+			return "", "", "", nil
+		}
+	case !u.o.Force && curErr == nil:
+		// By hand a new major is fine, but reinstalling (or downgrading)
+		// is only downtime unless asked for.
+		if ok, why := Decide(cur, latest, true); !ok {
+			u.logf("%s; --force reinstalls it", why)
 			return "", "", "", nil
 		}
 	}

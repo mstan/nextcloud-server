@@ -232,3 +232,32 @@ func TestPackageKindMustMatchInstall(t *testing.T) {
 		}
 	}
 }
+
+func TestManualUpdateOnlyNewerUnlessForced(t *testing.T) {
+	for _, tc := range []struct {
+		name, latest string
+		force        bool
+		want         string
+	}{
+		{"same version is skipped", "v35.0.1-win.1", false, "35.0.1"},
+		{"force reinstalls", "v35.0.1-win.1", true, "35.0.1"},
+		{"new major allowed by hand", "v36.0.0-win.1", false, "36.0.0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, svc := setup(t, nil)
+			g := newFakeGitHub(t, tc.latest, map[string]string{"v35.0.1-win.1": "35.0.1", "v36.0.0-win.1": "36.0.0"})
+			var log bytes.Buffer
+			o := opts(g, "v35.0.1-win.1", &log)
+			o.Force = tc.force
+			if err := Run(context.Background(), c, svc, o); err != nil {
+				t.Fatalf("%v\n%s", err, log.String())
+			}
+			if v := svc.installedVersion(); v != tc.want {
+				t.Fatalf("installed %q, want %q\n%s", v, tc.want, log.String())
+			}
+			if reinstalled := svc.starts > 0; reinstalled != (tc.force || tc.want != "35.0.1") {
+				t.Fatalf("starts=%d\n%s", svc.starts, log.String())
+			}
+		})
+	}
+}
