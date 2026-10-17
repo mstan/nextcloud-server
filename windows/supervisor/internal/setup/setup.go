@@ -94,7 +94,7 @@ func Run(ctx context.Context, c config.Config, o Options) error {
 	}
 	if o.Account != "" {
 		logf("granting %s access", o.Account)
-		if err := grant(c.Paths.StateDir, o.Account, "M", o.Log); err != nil {
+		if err := ProtectStateDir(c.Paths.StateDir, o.Account, o.Log); err != nil {
 			return err
 		}
 		if err := grant(c.Paths.DataDir, o.Account, "M", o.Log); err != nil {
@@ -267,6 +267,26 @@ func prepareDataDir(c config.Config, admin string, logf func(string, ...any)) er
 }
 
 // grant gives account inheritable rights ("M" modify, "RX" read+execute) on dir.
+// ProtectStateDir gives state_dir an access list of its own: SYSTEM and
+// Administrators full control, account (the service) modify, nobody else.
+// It holds the database files, Nextcloud's secrets and custom_apps (code the
+// service runs), and the entries C:\ProgramData passes down would let every
+// local user read them and create files among them. Existing children
+// inherit the new list; a file with its own protected list (the initial
+// admin password) keeps it.
+func ProtectStateDir(dir, account string, w io.Writer) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	cmd := exec.Command("icacls", dir, "/inheritance:r",
+		"/grant:r", "*S-1-5-18:(OI)(CI)F", "/grant:r", "*S-1-5-32-544:(OI)(CI)F", "/grant:r", account+":(OI)(CI)M", "/C", "/Q")
+	cmd.Stdout, cmd.Stderr = w, w
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("icacls %s: %w", dir, err)
+	}
+	return nil
+}
+
 func grant(dir, account, rights string, w io.Writer) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
