@@ -38,9 +38,12 @@ releases locally with `assemble.ps1`. Actions minutes are free for public repos.
 ## Pinned dependencies
 
 `windows/build/deps.lock.json` pins every third-party download by SHA-256.
-Mutable upstream URLs (FrankenPHP re-uploads its Windows zip daily) are
-mirrored as assets of the `deps` pre-release on this repo, with the original
-in `upstream_url`. To update one: download the new build, compare it file by
+Every one is mirrored as an asset of the `deps` pre-release on this repo, with
+the original in `upstream_url` (and its hash in the release's `SHA256SUMS`):
+upstream hosts rate-limit GitHub's shared runner addresses (HTTP 429), and
+FrankenPHP re-uploads its Windows zip daily. The upstream-tracking workflow
+mirrors each new Nextcloud release itself after checking its published
+SHA-256; `assemble.ps1` retries failed downloads with backoff. To update one: download the new build, compare it file by
 file with the current one (which binaries changed, and why), test, then upload
 it to `deps` under a versioned, hash-suffixed name and update the lock.
 

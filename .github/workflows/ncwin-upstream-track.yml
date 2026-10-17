@@ -83,10 +83,23 @@ jobs:
             exit 1
           fi
           ver=${NEW#v}
-          url="https://download.nextcloud.com/server/releases/nextcloud-$ver.zip"
-          sha=$(curl -fsSL "$url.sha256" | cut -d' ' -f1)
+          # download.nextcloud.com rate-limits shared runner addresses, so builds
+          # use a verified copy on this repo's deps release (windows/UPSTREAM.md).
+          up="https://download.nextcloud.com/server/releases/nextcloud-$ver.zip"
+          zip="$RUNNER_TEMP/nextcloud-$ver.zip"
+          curl -fsSL --retry 8 --retry-delay 30 --retry-all-errors -o "$zip" "$up"
+          sha=$(curl -fsSL --retry 8 --retry-delay 30 --retry-all-errors "$up.sha256" | cut -d' ' -f1)
           test ${#sha} -eq 64
-          jq --arg v "$ver" --arg u "$url" --arg s "$sha" '.nextcloud = {version: $v, url: $u, sha256: $s}' \
+          echo "$sha  $zip" | sha256sum -c -
+          if ! gh release view deps --json assets -q '.assets[].name' | grep -qx "nextcloud-$ver.zip"; then
+            gh release upload deps "$zip"
+            gh release download deps -p SHA256SUMS -D "$RUNNER_TEMP" --clobber
+            echo "$sha  nextcloud-$ver.zip" >> "$RUNNER_TEMP/SHA256SUMS"
+            gh release upload deps "$RUNNER_TEMP/SHA256SUMS" --clobber
+          fi
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/deps/nextcloud-$ver.zip"
+          jq --arg v "$ver" --arg u "$url" --arg s "$sha" --arg up "$up" \
+            '.nextcloud = {version: $v, url: $u, sha256: $s, upstream_url: $up}' \
             windows/build/deps.lock.json > deps.tmp && mv deps.tmp windows/build/deps.lock.json
           git commit -am "win: track Nextcloud $ver"
           git push --force-with-lease origin "$BRANCH"
