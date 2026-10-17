@@ -44,7 +44,8 @@ func phpLiteral(v any, indent string) string {
 	panic(fmt.Sprintf("phpLiteral: unsupported %T", v))
 }
 
-// PHPConfig renders a Nextcloud config file (config.php or *.config.php).
-func PHPConfig(values map[string]any) []byte {
-	return []byte("<?php\n// Pre-seeded by `ncwin setup`; Nextcloud manages this file from here on.\n$CONFIG = " + phpLiteral(values, "") + ";\n")
+// PHPConfig renders a Nextcloud config file (config.php or *.config.php)
+// headed by a one-line comment.
+func PHPConfig(comment string, values map[string]any) []byte {
+	return []byte("<?php\n// " + comment + "\n$CONFIG = " + phpLiteral(values, "") + ";\n")
 }

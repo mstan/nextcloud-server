@@ -162,7 +162,7 @@ func Run(ctx context.Context, c config.Config, o Options) error {
 	}
 	if !installed {
 		logf("writing %s", cfgPHP)
-		if err := os.WriteFile(cfgPHP, render.PHPConfig(SeedConfig(c)), 0o640); err != nil {
+		if err := os.WriteFile(cfgPHP, render.PHPConfig("Pre-seeded by `ncwin setup`; Nextcloud manages this file from here on.", SeedConfig(c)), 0o640); err != nil {
 			return err
 		}
 	}
