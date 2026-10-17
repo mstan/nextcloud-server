@@ -170,7 +170,8 @@ foreach ($db in @(@{On = $WithMariaDB; Key = 'mariadb'}, @{On = $WithPostgres; K
     Expand-Zip (Get-Pinned $d.url $d.sha256) $tmp
     $top = Get-ChildItem $tmp -Directory | Select-Object -First 1
     Move-Item $top.FullName (Join-Path $stage $db.Key)
-    # Optional "strip" list: bundled extras ncwin never runs (pgAdmin, StackBuilder, docs).
+    # Optional "strip" list (wildcards allowed): bundled extras ncwin never runs
+    # (pgAdmin, StackBuilder, docs, C headers, link libraries, debug symbols).
     if ($d.PSObject.Properties.Name -contains 'strip') {
         foreach ($s in $d.strip) {
             $p = Join-Path (Join-Path $stage $db.Key) $s
