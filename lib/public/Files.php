@@ -28,6 +28,11 @@ class Files {
 	 * @deprecated 14.0.0
 	 */
 	public static function rmdirr($dir, bool $deleteSelf = true) {
+		if (DIRECTORY_SEPARATOR === '\\') {
+			// Windows resolves directory listings through the realpath cache, which can still
+			// hold a path another process has since replaced.
+			clearstatcache(true);
+		}
 		if (is_dir($dir)) {
 			$files = new \RecursiveIteratorIterator(
 				new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
