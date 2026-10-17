@@ -128,7 +128,7 @@ if (-not $SkipUpstreamTests) {
 
 Step 'integration suite (bundled PostgreSQL)'
 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'windows\tests\run-integration.ps1') `
-    -Build $out -Db pgsql -HttpPort $HttpPort -HttpsPort $HttpsPort -StateRoot (Join-Path $WorkDir 'integration')
+    -Build $out -Database pgsql -HttpPort $HttpPort -HttpsPort $HttpsPort -StateRoot (Join-Path $WorkDir 'integration')
 Native 'integration suite'
 
 Step 'MSI, zip, checksums'
