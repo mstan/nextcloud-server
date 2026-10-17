@@ -15,6 +15,7 @@ use OC\Files\Storage\Temporary;
 use OC\Files\Storage\Wrapper\Jail;
 use OC\Files\View;
 use OCA\Files_Sharing\SharedStorage;
+use OCP\Config\IUserConfig;
 use OCP\Constants;
 use OCP\Files\Cache\IWatcher;
 use OCP\Files\IRootFolder;
@@ -284,6 +285,12 @@ class CacheTest extends TestCase {
 	 * https://github.com/nextcloud/server/issues/39879
 	 */
 	public function testShareRenameOriginalFileInRecentResults(): void {
+		// The skeleton (welcome.txt) is only copied on a user's first login, and
+		// login timestamps outlive the test run in the instance's database.
+		$userConfig = Server::get(IUserConfig::class);
+		$userConfig->deleteUserConfig(self::TEST_FILES_SHARING_API_USER3, 'login', 'lastLogin');
+		$userConfig->deleteUserConfig(self::TEST_FILES_SHARING_API_USER3, 'login', 'firstLogin');
+
 		self::loginHelper(self::TEST_FILES_SHARING_API_USER1);
 
 		$rootFolder = \OC::$server->getUserFolder(self::TEST_FILES_SHARING_API_USER1);
