@@ -34,3 +34,5 @@ posix	apps/settings/lib/SetupChecks/AppDirsWithDifferentOwner.php	$currentUserIn
 posix	occ	$ownerInfo = posix_getpwuid($targetUid);
 posix	occ	posix_setgid($targetGid);
 posix	occ	posix_setuid($targetUid);
+basename	lib/private/Files/Utils/PathHelper.php	$tail = '/' . basename($current) . $tail;
+dirname	lib/private/Files/Utils/PathHelper.php	$parent = dirname($current);
