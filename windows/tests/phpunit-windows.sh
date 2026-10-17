@@ -24,6 +24,7 @@ apps/files_versions/tests
 apps/files_sharing/tests
 apps/files_external/tests
 apps/settings/tests
+windows/app/windows_integration/tests
 "
 rc=0
 for s in $SUITES; do

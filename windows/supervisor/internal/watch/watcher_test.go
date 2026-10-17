@@ -42,13 +42,15 @@ type fakeApplier struct {
 	mu      sync.Mutex
 	root    Root
 	applied []string
+	trees   []string
 	rescans []string
 }
 
-func (f *fakeApplier) Apply(_ context.Context, p []string) (ApplyResult, error) {
+func (f *fakeApplier) Apply(_ context.Context, p, trees []string) (ApplyResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.applied = append(f.applied, p...)
+	f.trees = append(f.trees, trees...)
 	return ApplyResult{Scanned: len(p)}, nil
 }
 func (f *fakeApplier) Rescan(_ context.Context, r string) (ApplyResult, error) {
@@ -133,7 +135,7 @@ type failingApplier struct {
 	applies int
 }
 
-func (f *failingApplier) Apply(_ context.Context, p []string) (ApplyResult, error) {
+func (f *failingApplier) Apply(_ context.Context, p, _ []string) (ApplyResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.applies++
@@ -163,7 +165,7 @@ func TestFailedApplyEscalatesToRescan(t *testing.T) {
 			time.Sleep(5 * time.Millisecond)
 		}
 	}()
-	w.enqueue(root + "/alice/files/x.txt")
+	w.enqueue(false, root+"/alice/files/x.txt")
 	waitFor(t, func() bool { app.mu.Lock(); defer app.mu.Unlock(); return len(app.rescans) > 0 })
 	app.mu.Lock()
 	defer app.mu.Unlock()
@@ -172,5 +174,76 @@ func TestFailedApplyEscalatesToRescan(t *testing.T) {
 	}
 	if len(r.Read(ring.Query{Kinds: []string{"watch.escalate"}})) != 1 {
 		t.Fatal("escalation not recorded in ring")
+	}
+}
+
+// Only paths that arrived (added or renamed-to) are sent as trees; modified
+// and removed paths are not.
+func TestWatcherTreeFlagFromActions(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.ToSlash(dir)
+	files := filepath.Join(dir, "alice", "files")
+	if err := os.MkdirAll(filepath.Join(files, "old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(files, "mod.txt"), []byte("a"), 0o644)
+	app := &fakeApplier{root: Root{Kind: "data", Path: root}}
+	w := New(Options{Debounce: 100 * time.Millisecond}, ring.New(4096), app)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go w.Run(ctx)
+	waitFor(t, func() bool { app.mu.Lock(); defer app.mu.Unlock(); return len(app.rescans) == 1 })
+	time.Sleep(200 * time.Millisecond)
+
+	os.Mkdir(filepath.Join(files, "newdir"), 0o755)
+	os.Rename(filepath.Join(files, "old"), filepath.Join(files, "renamed"))
+	f, _ := os.OpenFile(filepath.Join(files, "mod.txt"), os.O_APPEND|os.O_WRONLY, 0o644)
+	f.WriteString("b")
+	f.Close()
+
+	has := func(list []string, suffix string) bool {
+		for _, p := range list {
+			if strings.HasSuffix(p, suffix) {
+				return true
+			}
+		}
+		return false
+	}
+	waitFor(t, func() bool {
+		app.mu.Lock()
+		defer app.mu.Unlock()
+		return has(app.applied, "alice/files/newdir") && has(app.applied, "alice/files/renamed") && has(app.applied, "alice/files/mod.txt")
+	})
+	app.mu.Lock()
+	defer app.mu.Unlock()
+	if !has(app.trees, "alice/files/newdir") || !has(app.trees, "alice/files/renamed") {
+		t.Errorf("arrived directories missing from trees: %v", app.trees)
+	}
+	if has(app.trees, "mod.txt") || has(app.trees, "alice/files/old") {
+		t.Errorf("modified/removed paths wrongly marked as trees: %v", app.trees)
+	}
+}
+
+func TestPendingTreeFlagIsSticky(t *testing.T) {
+	w := New(Options{}, ring.New(16), &fakeApplier{})
+	w.enqueue(true, "D:/d/x")
+	w.enqueue(false, "D:/d/x")
+	w.enqueue(false, "D:/d/y")
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.pending["D:/d/x"] || w.pending["D:/d/y"] {
+		t.Fatalf("pending = %v", w.pending)
+	}
+}
+
+// A retried tree stays a tree, even when the applier reports it in another spelling.
+func TestRetryKeepsTreeFlag(t *testing.T) {
+	w := New(Options{RetryDelay: 10 * time.Millisecond}, ring.New(16), &fakeApplier{})
+	w.retryLater([]string{"D:/Data/New", "D:/data/plain.txt"}, map[string]bool{treeKey(`d:\data\new`): true})
+	waitFor(t, func() bool { w.mu.Lock(); defer w.mu.Unlock(); return len(w.pending) == 2 })
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.pending["D:/Data/New"] || w.pending["D:/data/plain.txt"] {
+		t.Fatalf("pending = %v", w.pending)
 	}
 }
