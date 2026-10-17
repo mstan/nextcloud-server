@@ -56,8 +56,38 @@ func exec(name string, data any) ([]byte, error) {
 	return b.Bytes(), err
 }
 
-// WriteAll renders both files into the generated dir and returns their paths.
+// NextcloudConfigName is the config file ncwin owns in Nextcloud's config
+// directory. Nextcloud merges every *.config.php over config.php when it
+// reads its configuration, so these values follow ncwin.toml.
+const NextcloudConfigName = "ncwin.config.php"
+
+// NextcloudConfig renders the Nextcloud settings derived from ncwin.toml:
+// the host names clients may use, and the base URL of generated links.
+// (maintenance:install replaces trusted_domains with the installing
+// request's host, which on the command line is localhost.)
+func NextcloudConfig(c config.Config) []byte {
+	domains := []any{"localhost"}
+	for _, h := range c.SiteHosts() {
+		if h != "localhost" {
+			domains = append(domains, h)
+		}
+	}
+	return PHPConfig(map[string]any{
+		"trusted_domains":   domains,
+		"overwrite.cli.url": c.CLIURL(),
+	})
+}
+
+// WriteAll renders php.ini and the Caddyfile into the generated dir (and
+// returns their paths), and ncwin's Nextcloud config file.
 func WriteAll(c config.Config) (phpIniPath, caddyfilePath string, err error) {
+	ncDir := filepath.FromSlash(c.NCConfigDir())
+	if err = os.MkdirAll(ncDir, 0o755); err != nil {
+		return
+	}
+	if err = writeIfChanged(filepath.Join(ncDir, NextcloudConfigName), NextcloudConfig(c)); err != nil {
+		return
+	}
 	dir := filepath.FromSlash(c.GeneratedDir())
 	if err = os.MkdirAll(dir, 0o755); err != nil {
 		return

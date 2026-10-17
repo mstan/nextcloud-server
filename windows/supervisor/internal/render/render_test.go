@@ -59,3 +59,19 @@ func TestPHPIni(t *testing.T) {
 		t.Errorf("extension_dir wrong:\n%s", s)
 	}
 }
+
+func TestNextcloudConfigFollowsSites(t *testing.T) {
+	s := string(NextcloudConfig(testConfig(t)))
+	for _, want := range []string{
+		`'trusted_domains' =>`,
+		`0 => 'localhost',`,
+		`1 => 'nc.lan',`,
+		`2 => '192.168.1.5',`,
+		`3 => 'cloud.example.com',`,
+		`'overwrite.cli.url' => 'https://cloud.example.com',`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("ncwin.config.php lacks %q:\n%s", want, s)
+		}
+	}
+}
