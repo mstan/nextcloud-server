@@ -261,3 +261,33 @@ func TestManualUpdateOnlyNewerUnlessForced(t *testing.T) {
 		})
 	}
 }
+
+func TestBeforeInstallRunsOnceAndCanStopTheUpdate(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		c, svc := setup(t, nil)
+		g := newFakeGitHub(t, "v35.0.2-win.1", map[string]string{"v35.0.1-win.1": "35.0.1", "v35.0.2-win.1": "35.0.2"})
+		pk := &fakeMSI{cfg: c, svc: svc, product: "{ncwin-35.0.1-win.1.msi}"}
+		var log bytes.Buffer
+		o := opts(g, "v35.0.1-win.1", &log)
+		o.Packages = pk
+		calls := 0
+		o.BeforeInstall = func() error {
+			calls++
+			if len(pk.installs) != 0 {
+				t.Errorf("BeforeInstall ran after an install")
+			}
+			if fail {
+				return fmt.Errorf("parent did not exit")
+			}
+			return nil
+		}
+		err := Run(context.Background(), c, svc, o)
+		want := "35.0.2"
+		if fail {
+			want = "35.0.1"
+		}
+		if calls != 1 || (err != nil) != fail || svc.installedVersion() != want || !svc.running {
+			t.Fatalf("fail=%v: calls=%d err=%v version=%s running=%v\n%s", fail, calls, err, svc.installedVersion(), svc.running, log.String())
+		}
+	}
+}

@@ -22,7 +22,9 @@ import (
 	"os/signal"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/sys/windows"
@@ -30,6 +32,7 @@ import (
 	"golang.org/x/sys/windows/svc/eventlog"
 
 	"github.com/mstan/nextcloud-server/windows/supervisor/internal/config"
+	"github.com/mstan/nextcloud-server/windows/supervisor/internal/handoff"
 	"github.com/mstan/nextcloud-server/windows/supervisor/internal/ipc"
 	"github.com/mstan/nextcloud-server/windows/supervisor/internal/render"
 	"github.com/mstan/nextcloud-server/windows/supervisor/internal/ring"
@@ -369,6 +372,8 @@ func runUpdate(args []string) error {
 	check := fs.Bool("check", false, "report what an update would install, and change nothing")
 	force := fs.Bool("force", false, "install the latest release even if it is not newer than the running one")
 	relocated := fs.Bool("relocated", false, "internal: running from the relocated copy")
+	handoffName := fs.String("handoff", "", "internal: event signalling the launching process")
+	parentPID := fs.Uint("parent-pid", 0, "internal: the launching process")
 	_ = fs.Parse(args)
 	c, err := config.Load(*cfgPath)
 	if err != nil {
@@ -379,11 +384,13 @@ func runUpdate(args []string) error {
 		return nil
 	}
 	if !*relocated && !*check {
+		// The worker holds the lock; checking here only fails early, before
+		// copying over a running worker's executable.
 		unlock, err := updateLock()
 		if err != nil {
 			return err
 		}
-		defer unlock()
+		unlock()
 		self, err := os.Executable()
 		if err != nil {
 			return err
@@ -400,16 +407,47 @@ func runUpdate(args []string) error {
 		if err := os.WriteFile(cp, b, 0o755); err != nil {
 			return err
 		}
-		cmd := exec.Command(cp, append([]string{"update", "--relocated"}, args...)...)
+		// This process runs from install_dir, so it must be gone before the
+		// worker replaces it (see internal/handoff): it relays the worker's
+		// output until the worker is about to install, then exits.
+		hp, err := handoff.NewParent()
+		if err != nil {
+			return err
+		}
+		defer hp.Close()
+		cmd := exec.Command(cp, append([]string{"update", "--relocated", "--handoff", hp.Name,
+			"--parent-pid", strconv.Itoa(os.Getpid())}, args...)...)
 		cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
-		if err := cmd.Run(); err != nil {
+		// Out of a job this process may be in (Task Scheduler's), so the
+		// worker outlives it; not every job allows that.
+		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_BREAKAWAY_FROM_JOB}
+		if err := cmd.Start(); err != nil {
+			cmd.SysProcAttr = nil
+			if err = cmd.Start(); err != nil {
+				return err
+			}
+		}
+		done := make(chan error, 1)
+		go func() { done <- cmd.Wait() }()
+		select {
+		case <-hp.Signaled():
+			fmt.Printf("installing; the update continues without this window. Outcome: %s and the Application event log\n",
+				filepath.Join(filepath.FromSlash(c.LogDir()), "update.log"))
+			return nil
+		case err := <-done:
 			var ee *exec.ExitError
 			if errors.As(err, &ee) {
 				return exitCode(ee.ExitCode())
 			}
 			return err
 		}
-		return nil
+	}
+	if !*check {
+		unlock, err := updateLock()
+		if err != nil {
+			return err
+		}
+		defer unlock()
 	}
 
 	log := io.Writer(os.Stdout)
@@ -426,14 +464,33 @@ func runUpdate(args []string) error {
 		fmt.Fprintf(lf, "==== ncwin %s update %s\n", version, time.Now().Format(time.RFC3339))
 		log = io.MultiWriter(os.Stdout, lf)
 	}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	// Ctrl+C cancels the update only until it starts installing; from then on
+	// it runs to its end (health check, and rollback if needed), whatever
+	// happens to a console it may share.
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt)
+	installing := make(chan struct{})
+	go func() {
+		select {
+		case <-sigs:
+			cancel()
+		case <-installing:
+		}
+	}()
 	var out strings.Builder
 	err = update.Run(ctx, c, scmService{}, update.Options{
 		Source: *from, SHA256: *sum, Repo: c.Update.Repo, Current: version,
 		Auto: *auto, AllowMajor: c.Update.Majors, DryRun: *check, Force: *force,
 		ExternalDBBackedUp: *extOK, Packages: update.WindowsInstaller{},
 		Log: io.MultiWriter(log, &out),
+		BeforeInstall: func() error {
+			close(installing)
+			signal.Stop(sigs)
+			signal.Ignore(os.Interrupt)
+			return handoff.Release(*handoffName, uint32(*parentPID), time.Minute)
+		},
 	})
 	if !*check {
 		fmt.Fprintf(log, "update %s\n", map[bool]string{true: "OK", false: "FAILED: " + fmt.Sprint(err)}[err == nil])

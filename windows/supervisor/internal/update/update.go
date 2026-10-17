@@ -71,6 +71,9 @@ type Options struct {
 	DryRun bool
 	// Force installs the latest release even if it is not newer.
 	Force bool
+	// BeforeInstall runs just before install_dir is replaced, after which
+	// no process may still run from it (see cmd/ncwin's handoff).
+	BeforeInstall func() error
 	// ExternalDBBackedUp acknowledges that an external database (which ncwin
 	// cannot snapshot) has been backed up by the operator.
 	ExternalDBBackedUp bool
@@ -170,6 +173,13 @@ func Run(ctx context.Context, cfg config.Config, svc Service, o Options) error {
 		in.abandon()
 		u.startBestEffort()
 		return fmt.Errorf("database snapshot: %w", err)
+	}
+	if u.o.BeforeInstall != nil {
+		if err := u.o.BeforeInstall(); err != nil {
+			in.abandon()
+			u.startBestEffort()
+			return fmt.Errorf("before install: %w", err)
+		}
 	}
 	if err := in.install(ctx); err != nil {
 		in.abandon()
