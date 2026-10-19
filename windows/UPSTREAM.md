@@ -38,10 +38,11 @@ releases locally with `assemble.ps1`. Actions minutes are free for public repos.
 ## Pinned dependencies
 
 `windows/build/deps.lock.json` pins every third-party download by SHA-256.
-Every one is mirrored as an asset of the `deps` pre-release on this repo, with
-the original in `upstream_url` (and its hash in the release's `SHA256SUMS`):
-upstream hosts rate-limit GitHub's shared runner addresses (HTTP 429), and
-FrankenPHP re-uploads its Windows zip daily. The upstream-tracking workflow
+Nextcloud, extensions and database archives are mirrored as assets of the
+`deps` pre-release on this repo, with the original in `upstream_url` (and
+their hashes in the release's `SHA256SUMS`), because upstream hosts rate-limit
+GitHub's shared runner addresses (HTTP 429). Apache Lounge and official PHP
+archives use vendor URLs and published SHA-256 checksums. The upstream-tracking workflow
 mirrors each new Nextcloud release itself after checking its published
 SHA-256; `assemble.ps1` retries failed downloads with backoff. To update one: download the new build, compare it file by
 file with the current one (which binaries changed, and why), test, then upload
@@ -138,7 +139,7 @@ Release-only apps (not in this repo, e.g. `recommendations`, `photos`, `serverin
 ### Runtime requirements handled outside PHP
 
 - `OPENSSL_CONF` must point at `php/extras/ssl/openssl.cnf`, or `openssl_pkey_new()` fails ("Unable to create the key").
-- Caddy `skip_install_trust`: `tls internal` otherwise blocks on Windows trust-store installation.
+- Local certificate trust is installed only by the explicit `ncwin ca trust` command.
 - `opcache.enable_cli = 0`, `opcache.file_cache_fallback`: Windows shares one OPcache segment per user; a process mapping `php8ts.dll` elsewhere dies with "Opcode handlers are unusable due to ASLR".
 - Bundled PostgreSQL runs with a restricted token: `postgres.exe` refuses administrative rights, and setup runs as SYSTEM under the MSI.
 

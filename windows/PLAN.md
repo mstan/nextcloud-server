@@ -29,7 +29,7 @@
   - Windows filename rules: the `forbidden_filename_*` keys, the same ones `occ files:windows-compatible-filenames` sets
   - `binary_search_paths`, `upgrade.disable-web=true`
 - **Stack:**
-  - FrankenPHP ships official Windows builds (v1.13.0, 2026-10-04) that link the official thread-safe PHP 8.5. Nextcloud 35 accepts PHP 8.3 up to (but not including) 8.6.
+  - Apache Lounge supplies native Apache 2.4 builds; official thread-safe PHP 8.5 supplies `php8apache2_4.dll`. Nextcloud 35 accepts PHP 8.3 up to (but not including) 8.6.
   - Thread-safe Windows DLLs exist for APCu, imagick and redis.
   - NSSM is effectively unmaintained.
   - notify_push has no Windows server build.
@@ -52,7 +52,7 @@ F:\Projects\nextcloud  (fork of nextcloud/server)
     supervisor/   Go Windows service "ncwin" (golang.org/x/sys/windows/svc)
     app/          Nextcloud app "windows_integration" (occ commands; no core edits)
     build/        fetch, verify and assemble scripts (PowerShell) + Inno Setup script
-    templates/    Caddyfile.tmpl, php.ini.tmpl, config.defaults.php, ncwin.toml.example
+    templates/    httpd.conf.tmpl, php.ini.tmpl, config.defaults.php, ncwin.toml.example
     tests/        Windows integration suite (Pester + Go + PHP)
     UPSTREAM.md   rebase procedure and patch inventory (one line per patch, with the reason)
 ```
@@ -84,10 +84,10 @@ Every patch keeps the existing behaviour on Linux and changes only what Windows 
 - **Service account:** runs as `NT SERVICE\ncwin`, a virtual account.
 - **Child processes:** all run inside one Job Object, so they die together with the service.
   - **Database.** If MariaDB or PostgreSQL is bundled, it starts first and readiness is checked. It is shut down gracefully, with `mysqladmin shutdown` or `pg_ctl stop -m fast`. SQLite and external databases need no child process.
-  - **FrankenPHP in classic (non-worker) mode.** It runs on a Caddyfile generated from `ncwin.toml`:
+  - **Apache with the thread-safe PHP module.** It runs on `httpd.conf` generated from `ncwin.toml`:
     - `http_port`, `https_port`, and the bind addresses
-    - a LAN site using `tls internal`, with a list of hostnames and IPs
-    - a public site with ACME, using the HTTP-01 or TLS-ALPN challenge
+    - LAN certificates issued and renewed by ncwin's local CA, covering hostnames and IPs
+    - public certificates managed by `mod_md` with ACME HTTP-01 or TLS-ALPN challenges
     - Nextcloud's well-known redirects, deny rules for `data`, `config` and `.ht*`, the upload size limit, and timeouts
   - **Background jobs.** `php cron.php` runs every 5 minutes, never overlapping. Nextcloud's background mode is set to `cron`.
   - **File watcher.**
@@ -108,7 +108,7 @@ Every patch keeps the existing behaviour on Linux and changes only what Windows 
   1. Download the official `nextcloud-X.Y.Z.zip` and verify its sha256 and Nextcloud signature.
   2. Apply `git diff vX.Y.Z..win/vX.Y.Z -- . ':!windows'` to it with `git apply --3way` against the tag.
   3. Add the `windows_integration` app and sign core with the fork's key.
-  4. Add pinned and hashed FrankenPHP and PHP, the thread-safe PECL extensions (apcu, imagick with ImageMagick DLLs), and optionally portable MariaDB and PostgreSQL.
+  4. Add pinned and hashed Apache and PHP, the thread-safe PECL extensions (apcu, imagick with ImageMagick DLLs), and optionally portable MariaDB and PostgreSQL.
   5. Add `ncwin.exe`, then build the Inno Setup installer.
 - **Installer:**
   - Asks for the database (SQLite, bundled MariaDB, bundled PostgreSQL, or an existing server), the data directory, the ports, the hostnames and an optional public domain.
@@ -140,9 +140,9 @@ Every patch keeps the existing behaviour on Linux and changes only what Windows 
 ## Phases (in order)
 1. **Fork and skeleton.**
    - `gh repo fork nextcloud/server`, clone to `F:\Projects\nextcloud`, create `win/35` from `v35.0.2`, and lay out the `windows/` tree.
-   - Pin FrankenPHP, PHP and the extensions in `windows/build/deps.lock.json`.
+   - Pin Apache, PHP and the extensions in `windows/build/deps.lock.json`.
 2. **Core patches.** Implement section 1, then confirm that `occ maintenance:install` (SQLite) completes on Windows.
-3. **Supervisor.** Service, children, Caddyfile generation, cron loop, ring buffer, CLI.
+3. **Supervisor.** Service, children, Apache configuration generation, cron loop, ring buffer, CLI.
 4. **Watcher and app.** `windows:apply-changes` and the watcher, with handling for buffer overflow.
 5. **Build and installer.** `assemble.ps1`, Inno Setup, the database choices, ACLs.
 6. **Updates and rollback.** `ncwin update`.
@@ -166,11 +166,11 @@ Every patch keeps the existing behaviour on Linux and changes only what Windows 
   - Nextcloud desktop client sync, round trip.
   - `occ integrity:check-core` is clean, using the fork's root certificate.
   - The admin overview's setup checks report no errors.
-  - Service lifecycle: stop and start, kill FrankenPHP to confirm the supervisor restarts it, and a reboot.
+  - Service lifecycle: stop and start, kill Apache to confirm the supervisor restarts it, and a reboot.
   - `ncwin update` from the previous release, including a forced failure to confirm the rollback.
 - **Rebase drill:** replay the patch set from 34.0.5 to 35.0.2 to prove the upstream-tracking procedure works before relying on it.
 
 ## Open items to settle during implementation (not blocking)
-- Public sites on ports other than 80/443 with no forwarding need the ACME DNS challenge. That means a custom FrankenPHP build (xcaddy) with the owner's DNS provider module.
+- Public sites on ports other than 80/443 with no forwarding need the ACME DNS challenge, which requires a DNS provider integration; the generated Apache configuration uses HTTP-01 and TLS-ALPN challenges.
 - Whether PHP's Windows file opens include `FILE_SHARE_DELETE`. Tests decide whether the retry patch is enough.
 - notify_push and a Redis-compatible cache (Garnet or Memurai) are out of scope unless the owner asks. Clients fall back to polling.

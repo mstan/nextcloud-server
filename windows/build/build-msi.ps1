@@ -48,5 +48,8 @@ try {
     Set-Content -Encoding ASCII -Path "$Out.sha256" -Value "$hash  $(Split-Path -Leaf $Out)"
     Write-Host "built $Out ($([math]::Round((Get-Item $Out).Length / 1MB)) MB, sha256 $hash)"
 } finally {
-    Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+    $resolvedTmp = [IO.Path]::GetFullPath($tmp)
+    $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    if (-not $resolvedTmp.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'MSI temporary directory is outside the temporary root' }
+    Remove-Item -LiteralPath $resolvedTmp -Recurse -Force -ErrorAction SilentlyContinue
 }

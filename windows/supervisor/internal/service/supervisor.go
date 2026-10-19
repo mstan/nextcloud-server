@@ -156,6 +156,8 @@ func (s *Supervisor) Run(ctx context.Context) error {
 
 	loops, cancelLoops := context.WithCancel(context.Background())
 	wg.Add(1)
+	go func() { defer wg.Done(); s.certificateLoop(loops) }()
+	wg.Add(1)
 	go func() { defer wg.Done(); s.cronLoop(loops) }()
 	if s.cfg.Watcher.Enabled {
 		wg.Add(1)
@@ -197,19 +199,20 @@ func (s *Supervisor) webSpec() proc.Spec {
 	gen := filepath.FromSlash(s.cfg.GeneratedDir())
 	return proc.Spec{
 		Name:     "web",
-		Path:     s.cfg.FrankenPHPExe(),
-		Args:     []string{"run", "--config", filepath.Join(gen, "Caddyfile"), "--adapter", "caddyfile"},
+		Path:     s.cfg.ApacheExe(),
+		Args:     []string{"-d", filepath.FromSlash(s.cfg.ApacheDir()), "-f", filepath.Join(gen, "httpd.conf")},
 		Env:      nc.PHPEnv(s.cfg),
-		Dir:      filepath.FromSlash(s.cfg.PHPDir()),
+		Dir:      filepath.FromSlash(s.cfg.ApacheDir()),
 		Log:      filepath.Join(filepath.FromSlash(s.cfg.LogDir()), "web.log"),
 		Ready:    func(ctx context.Context) error { return webReady(ctx, s.cfg) },
 		PreStart: func() error { return proc.PortsFree(append(SitePorts(s.cfg), s.cfg.Web.HTTPPort)...) },
+		Stop:     func(context.Context) error { return signalWeb(s.cfg, "shutdown") },
 	}
 }
 
 // webReady requires every site port to accept connections and, for the first
 // internal-CA or plain-HTTP site, status.php to answer through TLS and PHP:
-// an open port alone does not mean Caddy has its certificate loaded yet.
+// an open port alone does not mean Apache has its certificate loaded yet.
 // ACME sites are not probed end to end, since issuance may legitimately take
 // a while (or wait for port forwarding).
 func webReady(ctx context.Context, c config.Config) error {
@@ -252,7 +255,7 @@ func webReady(ctx context.Context, c config.Config) error {
 	return nil
 }
 
-// SitePorts returns the TCP ports Caddy should be listening on.
+// SitePorts returns the TCP ports Apache should be listening on.
 func SitePorts(c config.Config) []int {
 	seen := map[int]bool{}
 	var out []int
@@ -350,6 +353,8 @@ func (s *Supervisor) handle(ctx context.Context, op string, args json.RawMessage
 		s.mu.Unlock()
 		st.Ring[0], st.Ring[1] = s.ring.Bounds()
 		return st, nil
+	case "web-reload":
+		return nil, ReloadWeb(s.cfg)
 	case "shutdown":
 		// Used by foreground runs and tooling; the SCM path stops the same way.
 		s.ring.Add("svc.shutdown", "ipc", "requested", nil)

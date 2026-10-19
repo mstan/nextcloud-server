@@ -1,13 +1,14 @@
 <#
 .SYNOPSIS
   Assemble an ncwin install tree: official Nextcloud release + this fork's
-  core patches + the Windows runtime (FrankenPHP/PHP, PECL, optional DBs) +
+  core patches + the Windows runtime (Apache/PHP, PECL, optional DBs) +
   ncwin.exe.
 
 .DESCRIPTION
   Output layout (= paths.install_dir on the target machine):
     <Out>\nextcloud\   patched Nextcloud web root (+ apps\windows_integration)
-    <Out>\php\         FrankenPHP + PHP (TS) + extensions
+    <Out>\apache\      Apache HTTP Server
+    <Out>\php\         PHP (TS) + extensions
     <Out>\mariadb\     optional, -WithMariaDB
     <Out>\pgsql\       optional, -WithPostgres
     <Out>\ncwin.exe
@@ -41,6 +42,9 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$git = Join-Path $env:ProgramFiles 'Git\mingw64\bin\git.exe'
+if (-not (Test-Path -LiteralPath $git)) { $git = (Get-Command git -CommandType Application).Source }
+$env:PATH = (Split-Path -Parent $git) + [IO.Path]::PathSeparator + $env:PATH
 # (Computed here: Windows PowerShell 5.1 leaves $PSScriptRoot empty in param() defaults.)
 if (-not $WorkDir) { $WorkDir = Join-Path (Split-Path -Parent $repo) 'nextcloud-build' }
 $lock = Get-Content -Raw (Join-Path $PSScriptRoot 'deps.lock.json') | ConvertFrom-Json
@@ -106,26 +110,41 @@ Expand-Zip $ncZip $stage   # zip contains a top-level nextcloud\ directory
 $tag = "v$($nc.version)"
 $patch = Join-Path $WorkDir "ncwin-$($nc.version).patch"
 # No "^{commit}" peel syntax: MSYS2's git brace-expands its arguments.
-& git -C $repo rev-parse --verify --quiet "refs/tags/$tag" | Out-Null
+& $git -C $repo rev-parse --verify --quiet "refs/tags/$tag" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "upstream tag $tag not found in $repo; run: git fetch upstream --tags" }
 # --output, not a pipe: PowerShell 5.1 re-encodes native-command pipeline text.
 # Release zips contain no tests or build tooling; never ship those parts of the patch set.
-& git -C $repo diff --binary --full-index "--output=$patch" $tag $PatchRef -- . ':(exclude)windows' ':(exclude).github' ':(exclude)tests' ':(exclude)build' ':(exclude,glob)apps/*/tests/**'
+& $git -C $repo diff --ignore-submodules=all --binary --full-index "--output=$patch" $tag $PatchRef -- . ':(exclude)windows' ':(exclude).github' ':(exclude)tests' ':(exclude)build' ':(exclude,glob)apps/*/tests/**'
 if ($LASTEXITCODE -ne 0) { throw 'git diff failed' }
 $patchSize = (Get-Item $patch).Length
 if ($patchSize -gt 0) {
     Write-Host "apply fork patch ($patchSize bytes, $tag..$PatchRef)"
-    & git -C (Join-Path $stage 'nextcloud') apply --whitespace=nowarn $patch
-    if ($LASTEXITCODE -ne 0) { throw "fork patch does not apply cleanly to the $($nc.version) release zip" }
+    # Release ZIPs do not preserve the executable bit of occ.
+    $savedPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $git -c core.filemode=false -C (Join-Path $stage 'nextcloud') apply --whitespace=nowarn $patch
+        $patchExit = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $savedPreference }
+    if ($patchExit -ne 0) { throw "fork patch does not apply cleanly to the $($nc.version) release zip" }
 } else {
     Write-Host "no fork patches between $tag and $PatchRef"
 }
 Copy-Item -Recurse (Join-Path $repo 'windows\app\windows_integration') (Join-Path $stage 'nextcloud\apps\windows_integration')
 
-# 2. PHP runtime.
-$fp = $lock.frankenphp
-Write-Host "extract frankenphp $($fp.version) (PHP $($fp.php))"
-Expand-Zip (Get-Pinned $fp.url $fp.sha256) (Join-Path $stage 'php')
+# 2. Apache and PHP runtime.
+$httpd = $lock.apache
+Write-Host "extract Apache $($httpd.version)"
+$httpdTmp = Join-Path $stage 'apache-unpack'
+Expand-Zip (Get-Pinned $httpd.url $httpd.sha256) $httpdTmp
+Move-Item -LiteralPath (Join-Path $httpdTmp 'Apache24') -Destination (Join-Path $stage 'apache')
+$httpdResolved = [IO.Path]::GetFullPath($httpdTmp)
+if (-not $httpdResolved.StartsWith([IO.Path]::GetFullPath($stage) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Apache unpack path is outside staging' }
+Remove-Item -LiteralPath $httpdResolved -Recurse -Force
+$phpRuntime = $lock.php
+Write-Host "extract PHP $($phpRuntime.version)"
+Expand-Zip (Get-Pinned $phpRuntime.url $phpRuntime.sha256) (Join-Path $stage 'php')
+if (-not (Test-Path -LiteralPath (Join-Path $stage 'php\php8apache2_4.dll'))) { throw 'PHP runtime lacks the Apache module (requires thread-safe PHP)' }
 foreach ($ext in $lock.pecl.PSObject.Properties) {
     $zip = Get-Pinned $ext.Value.url $ext.Value.sha256
     $tmp = Join-Path $WorkDir "pecl-$($ext.Name)"
@@ -199,7 +218,7 @@ foreach ($db in @(@{On = $WithMariaDB; Key = 'mariadb'}, @{On = $WithPostgres; K
 Write-Host 'build ncwin.exe'
 Push-Location (Join-Path $repo 'windows\supervisor')
 try {
-    $ver = if ($Version) { $Version } else { (& git -C $repo describe --tags --always $PatchRef) }
+    $ver = if ($Version) { $Version } else { (& $git -C $repo describe --tags --always $PatchRef) }
     & go build -trimpath -ldflags "-s -w -X main.version=$ver" -o (Join-Path $stage 'ncwin.exe') ./cmd/ncwin
     if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
 } finally { Pop-Location }

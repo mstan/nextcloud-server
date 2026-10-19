@@ -1,6 +1,12 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/BurntSushi/toml"
+)
 
 func TestCleanPath(t *testing.T) {
 	for in, want := range map[string]string{
@@ -41,5 +47,41 @@ func TestValidateRepairsTrailingDot(t *testing.T) {
 	}
 	if c.Paths.InstallDir != `C:\Program Files\ncwin` {
 		t.Errorf("install_dir = %q", c.Paths.InstallDir)
+	}
+}
+
+func TestConfigPathAndThreads(t *testing.T) {
+	c := Default()
+	c.Paths.DataDir = t.TempDir()
+	c.Web.Sites = []Site{{Addresses: []string{"localhost"}, TLS: "internal"}}
+	path := filepath.Join(t.TempDir(), "custom.toml")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := toml.NewEncoder(f).Encode(c); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.ConfigPath() != filepath.ToSlash(path) {
+		t.Fatalf("config path = %q", loaded.ConfigPath())
+	}
+	t.Chdir(filepath.Dir(path))
+	relative, err := Load(filepath.Base(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if relative.ConfigPath() != filepath.ToSlash(path) {
+		t.Fatalf("relative config path = %q", relative.ConfigPath())
+	}
+	loaded.Web.PHPThreads = -1
+	if err := loaded.Validate(); err == nil {
+		t.Fatal("accepted negative PHP thread count")
 	}
 }

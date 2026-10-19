@@ -11,7 +11,7 @@ func (c Config) SiteHosts() []string {
 	var out []string
 	for _, s := range c.Web.Sites {
 		for _, a := range s.Addresses {
-			if h := siteURL(a, s.TLS).Hostname(); h != "" && !seen[h] {
+			if h := SiteURL(a, s.TLS).Hostname(); h != "" && !seen[h] {
 				seen[h] = true
 				out = append(out, h)
 			}
@@ -28,7 +28,7 @@ func (c Config) CLIURL() string {
 	var first, lan string
 	for _, s := range c.Web.Sites {
 		for _, a := range s.Addresses {
-			u := siteURL(a, s.TLS)
+			u := SiteURL(a, s.TLS)
 			full := strings.TrimRight(u.String(), "/")
 			switch {
 			case s.TLS == "acme":
@@ -47,8 +47,9 @@ func (c Config) CLIURL() string {
 	return first
 }
 
-// siteURL parses a Caddy site address ("host", "host:port" or a URL).
-func siteURL(addr, tls string) *url.URL {
+// SiteURL parses a site address ("host", "host:port" or a URL).
+// Invalid addresses return an empty URL.
+func SiteURL(addr, tls string) *url.URL {
 	if !strings.Contains(addr, "://") {
 		scheme := "https://"
 		if tls == "off" {

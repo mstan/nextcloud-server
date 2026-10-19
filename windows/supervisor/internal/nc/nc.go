@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 
@@ -18,6 +19,7 @@ import (
 // PHPEnv is the environment every PHP process (web, cron, occ, applier) runs with.
 func PHPEnv(c config.Config) []string {
 	return []string{
+		"PATH=" + filepath.FromSlash(c.PHPDir()) + string(os.PathListSeparator) + os.Getenv("PATH"),
 		"PHPRC=" + filepath.FromSlash(c.GeneratedDir()),
 		"NEXTCLOUD_CONFIG_DIR=" + c.NCConfigDir() + "/",
 		"TMP=" + filepath.FromSlash(c.TempDir()),

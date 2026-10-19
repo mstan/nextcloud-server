@@ -2,7 +2,7 @@
 # After editing, restart the service: ncwin stop && ncwin start
 
 [paths]
-install_dir = 'C:\Program Files\ncwin'   # php\, nextcloud\, ncwin.exe (read-only)
+install_dir = 'C:\Program Files\ncwin'   # apache\, php\, nextcloud\, ncwin.exe (read-only)
 state_dir   = 'C:\ProgramData\ncwin'     # config, logs, temp, certificates, bundled DB data
 data_dir    = 'D:\NextcloudData'         # Nextcloud data directory (keep the path short)
 

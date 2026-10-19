@@ -6,7 +6,7 @@ the pieces that make it a service:
 
 | Path | What |
 |---|---|
-| `supervisor/` | `ncwin.exe` (Go): Windows service that runs the bundled database, FrankenPHP (web + PHP), background jobs and the file watcher |
+| `supervisor/` | `ncwin.exe` (Go): Windows service that runs the bundled database, Apache with PHP, background jobs and the file watcher |
 | `app/windows_integration/` | Nextcloud app: `occ windows:apply-changes`, `windows:watch-roots`, `windows:selftest` |
 | `build/` | `assemble.ps1` (release zip + fork patches + pinned runtime → install tree), `deps.lock.json` |
 | `tests/` | Windows integration tests |
@@ -28,6 +28,15 @@ msiexec /i ncwin-35.0.2-win.3.msi /qn NCWIN_DATADIR=D:\NextcloudData\ NCWIN_DB=p
 
 LAN sites use ncwin's own CA: `ncwin ca export ncwin-root.crt` and trust it
 on client devices (`ncwin ca trust` on the server itself).
+
+The web server is native Apache 2.4 with the official thread-safe PHP 8.5
+module. Apache reads Nextcloud's `.htaccess` rules and serves HTTP/1.1 and
+HTTP/2. Public certificates are managed by Apache's `mod_md` (ACME); LAN
+certificates are renewed by ncwin and loaded with a graceful Apache restart.
+Upgrades from the earlier Caddy runtime reuse its local CA automatically,
+so existing client trust is preserved. nginx's native Windows build is not
+used because its documented worker and scalability limitations make Apache
+a better fit here. No IIS component is required.
 
 Upgrades are automatic: a daily scheduled task (`ncwin\update`, 04:30, run
 late if the machine was off) installs new releases of the running Nextcloud
@@ -53,15 +62,16 @@ into `(unfinished install <date>)`.
 ```
 C:\Program Files\ncwin\      install_dir (read-only; replaced by updates)
   ncwin.exe
-  php\                       FrankenPHP + PHP 8.5 TS + extensions
+  apache\                    Apache HTTP Server 2.4
+  php\                       PHP 8.5 TS + extensions
   nextcloud\                 patched Nextcloud web root
   mariadb\ | pgsql\          optional bundled database
 C:\ProgramData\ncwin\        state_dir
   ncwin.toml                 the only file you edit
   config\config.php          Nextcloud config (NEXTCLOUD_CONFIG_DIR)
   custom_apps\               app-store apps
-  generated\                 php.ini, Caddyfile, my.ini (rendered from ncwin.toml)
-  log\  tmp\  caddy\  db\
+  generated\                 php.ini, httpd.conf, my.ini (rendered from ncwin.toml)
+  log\  tmp\  tls\  db\
 D:\NextcloudData\            data_dir
 ```
 

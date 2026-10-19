@@ -5,13 +5,16 @@
     "sha256": "2f1dcec6a7cdab70346e80a823ccaaa2001a6085013d9f2ae0a2606fa38c2835",
     "upstream_url": "https://download.nextcloud.com/server/releases/nextcloud-35.0.2.zip"
   },
-  "frankenphp": {
-    "version": "1.13.0",
-    "php": "8.5.11-ts-vs17-x64",
-    "url": "https://github.com/mstan/nextcloud-server/releases/download/deps/frankenphp-1.13.0-windows-x86_64-6b952e1a.zip",
-    "sha256": "6b952e1a43dd64f7c5defcffd511ac0f9e548402495fd18946b0ebcdd679c840",
-    "upstream_url": "https://github.com/php/frankenphp/releases/download/v1.13.0/frankenphp-windows-x86_64.zip",
-    "note": "FrankenPHP rebuilds and re-uploads the Windows zip of its latest release daily (--clobber); this is the exact build ncwin was tested with, mirrored on the deps release."
+  "apache": {
+    "version": "2.4.69-261002-Win64-VS18",
+    "url": "https://www.apachelounge.com/download/VS18/binaries/httpd-2.4.69-261002-Win64-VS18.zip",
+    "sha256": "ca272e0b75abad78b1e4029a0753b20ff2232d2d857e8eebeea5d469c5776977",
+    "checksums_url": "https://www.apachelounge.com/download/VS18/binaries/httpd-2.4.69-261002-Win64-VS18.zip.txt"
+  },
+  "php": {
+    "version": "8.5.11-ts-vs17-x64",
+    "url": "https://downloads.php.net/~windows/releases/archives/php-8.5.11-Win32-vs17-x64.zip",
+    "sha256": "c83d5a1e0d760fb026ce695d8a70a73a4c81ac224b3e5c425406b23a7d53e1de"
   },
   "pecl": {
     "apcu": {

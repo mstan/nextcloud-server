@@ -16,13 +16,14 @@ import (
 
 // Config is the parsed ncwin.toml.
 type Config struct {
-	Paths    Paths    `toml:"paths"`
-	Web      Web      `toml:"web"`
-	Database Database `toml:"database"`
-	Cron     Cron     `toml:"cron"`
-	Watcher  Watcher  `toml:"watcher"`
-	Ring     Ring     `toml:"ring"`
-	Update   Update   `toml:"update"`
+	sourcePath string
+	Paths      Paths    `toml:"paths"`
+	Web        Web      `toml:"web"`
+	Database   Database `toml:"database"`
+	Cron       Cron     `toml:"cron"`
+	Watcher    Watcher  `toml:"watcher"`
+	Ring       Ring     `toml:"ring"`
+	Update     Update   `toml:"update"`
 }
 
 // Update says where `ncwin update` looks for releases, and whether the daily
@@ -53,7 +54,7 @@ type Web struct {
 	Sites       []Site `toml:"site"`
 }
 
-// Site is one Caddy site block. Addresses may carry explicit ports, e.g. "https://nc.lan:8443".
+// Site is one virtual host. Addresses may carry explicit ports, e.g. "https://nc.lan:8443".
 type Site struct {
 	Addresses []string `toml:"addresses"`
 	TLS       string   `toml:"tls"` // "internal" | "acme" | "off"
@@ -125,6 +126,11 @@ func Default() Config {
 // Load reads path over Default() and validates the result.
 func Load(path string) (Config, error) {
 	c := Default()
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return c, err
+	}
+	c.sourcePath = abs
 	if _, err := toml.DecodeFile(path, &c); err != nil {
 		return c, fmt.Errorf("%s: %w", path, err)
 	}
@@ -157,6 +163,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Web.PHPThreads == 0 {
 		c.Web.PHPThreads = 2 * runtime.NumCPU()
+	}
+	if c.Web.PHPThreads < 1 {
+		add("web.php_threads must be positive or zero for automatic sizing")
 	}
 	if len(c.Web.Sites) == 0 {
 		add("at least one [[web.site]] is required")
@@ -235,14 +244,22 @@ func CleanPath(p string) string {
 	return filepath.Clean(vol + out)
 }
 
-// Derived paths. All forward-slashed so they can go straight into php.ini, the Caddyfile and config.php.
+// Derived paths. All forward-slashed so they can go straight into PHP and Apache configuration.
 
 func slash(p string) string { return filepath.ToSlash(p) }
 
-func (c Config) PHPDir() string { return slash(filepath.Join(c.Paths.InstallDir, "php")) }
-func (c Config) PHPExe() string { return filepath.Join(c.Paths.InstallDir, "php", "php.exe") }
-func (c Config) FrankenPHPExe() string {
-	return filepath.Join(c.Paths.InstallDir, "php", "frankenphp.exe")
+func (c Config) PHPDir() string    { return slash(filepath.Join(c.Paths.InstallDir, "php")) }
+func (c Config) PHPExe() string    { return filepath.Join(c.Paths.InstallDir, "php", "php.exe") }
+func (c Config) ApacheDir() string { return slash(filepath.Join(c.Paths.InstallDir, "apache")) }
+func (c Config) ApacheExe() string {
+	return filepath.Join(c.Paths.InstallDir, "apache", "bin", "httpd.exe")
+}
+func (c Config) SupervisorExe() string { return slash(filepath.Join(c.Paths.InstallDir, "ncwin.exe")) }
+func (c Config) ConfigPath() string {
+	if c.sourcePath != "" {
+		return slash(c.sourcePath)
+	}
+	return slash(filepath.Join(c.Paths.StateDir, "ncwin.toml"))
 }
 func (c Config) WebRoot() string       { return slash(filepath.Join(c.Paths.InstallDir, "nextcloud")) }
 func (c Config) GeneratedDir() string  { return slash(filepath.Join(c.Paths.StateDir, "generated")) }
@@ -250,7 +267,8 @@ func (c Config) NCConfigDir() string   { return slash(filepath.Join(c.Paths.Stat
 func (c Config) CustomAppsDir() string { return slash(filepath.Join(c.Paths.StateDir, "custom_apps")) }
 func (c Config) LogDir() string        { return slash(filepath.Join(c.Paths.StateDir, "log")) }
 func (c Config) TempDir() string       { return slash(filepath.Join(c.Paths.StateDir, "tmp")) }
-func (c Config) CaddyDataDir() string  { return slash(filepath.Join(c.Paths.StateDir, "caddy")) }
+func (c Config) TLSDir() string        { return slash(filepath.Join(c.Paths.StateDir, "tls")) }
+func (c Config) CARootPath() string    { return filepath.Join(filepath.FromSlash(c.TLSDir()), "root.crt") }
 func (c Config) DBDir() string         { return slash(filepath.Join(c.Paths.StateDir, "db")) }
 func (c Config) DataDir() string       { return slash(c.Paths.DataDir) }
 
@@ -274,7 +292,7 @@ func (c Config) JournalPath() string {
 
 // EnsureStateDirs creates every directory ncwin writes to.
 func (c Config) EnsureStateDirs() error {
-	for _, d := range []string{c.GeneratedDir(), c.NCConfigDir(), c.CustomAppsDir(), c.LogDir(), c.TempDir(), c.TempDir() + "/opcache", c.CaddyDataDir(), c.DataDir()} {
+	for _, d := range []string{c.GeneratedDir(), c.NCConfigDir(), c.CustomAppsDir(), c.LogDir(), c.TempDir(), c.TempDir() + "/opcache", c.TLSDir(), c.DataDir()} {
 		if err := os.MkdirAll(filepath.FromSlash(d), 0o755); err != nil {
 			return err
 		}

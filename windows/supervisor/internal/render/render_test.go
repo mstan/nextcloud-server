@@ -21,27 +21,118 @@ func testConfig(t *testing.T) config.Config {
 	return c
 }
 
-func TestCaddyfile(t *testing.T) {
-	b, err := Caddyfile(testConfig(t))
+func TestApache(t *testing.T) {
+	b, err := Apache(testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := string(b)
 	for _, want := range []string{
-		"https://nc.lan:8443, https://192.168.1.5:8443 {\n\ttls internal\n\timport nextcloud",
-		"cloud.example.com {\n\timport nextcloud",
-		"max_size 16GB",
-		`root * "C:/Program Files/ncwin/nextcloud"`,
-		"email a@b.c",
-		"skip_install_trust",
-		"persist_config off",
-		`output file "C:/ProgramData/ncwin/log/access.log"`,
-		"format json",
-		`root * "C:/ProgramData/ncwin"`, // custom_apps assets
+		"<VirtualHost *:8443>\n    ServerName nc.lan",
+		"<VirtualHost *:8443>\n    ServerName 192.168.1.5",
+		`DocumentRoot "C:/Program Files/ncwin/nextcloud"`,
+		`LoadModule php_module "C:/Program Files/ncwin/php/php8apache2_4.dll"`,
+		`PHPIniDir "C:/ProgramData/ncwin/generated"`,
+		`MDContactEmail "a@b.c"`,
+		`MDomain cloud.example.com`,
+		`SSLCertificateFile "C:/ProgramData/ncwin/tls/server.crt"`,
+		`Alias /custom_apps/ "C:/ProgramData/ncwin/custom_apps/"`,
+		`AllowOverride All`,
+		`Require all denied`,
+		`LimitRequestBody 0`,
+		`LogFormat "%{end:sec}t.%{end:usec_frac}t`,
+		`RewriteCond %{THE_REQUEST} "\s/+[^?\s]*(?:%20|%2e|\.)(?:/|[?\s])" [NC]`,
+		`RewriteRule ^ https://nc.lan:8443%{REQUEST_URI} [R=308,L,NE]`,
+		`MDNotifyCmd "C:/Program Files/ncwin/ncwin.exe" web-reload --config "C:/ProgramData/ncwin/ncwin.toml"`,
 	} {
 		if !strings.Contains(s, want) {
-			t.Errorf("Caddyfile missing %q\n%s", want, s)
+			t.Errorf("httpd.conf missing %q\n%s", want, s)
 		}
+	}
+	if strings.Count(s, "Listen 8443\n") != 1 {
+		t.Error("shared listener emitted more than once")
+	}
+}
+
+func TestApachePlainHTTP(t *testing.T) {
+	c := testConfig(t)
+	c.Web.Sites = []config.Site{{Addresses: []string{"localhost:8080"}, TLS: "off"}}
+	b, err := Apache(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	if !strings.Contains(s, "<VirtualHost *:8080>\n    ServerName localhost") || strings.Contains(s, "SSLEngine On") || strings.Contains(s, "MDomain ") || strings.Contains(s, "Strict-Transport-Security") {
+		t.Fatal(s)
+	}
+}
+
+func TestApacheIPv6(t *testing.T) {
+	c := testConfig(t)
+	c.Web.Sites = []config.Site{{Addresses: []string{"https://[::1]:8443"}, TLS: "internal"}}
+	b, err := Apache(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "ServerName [::1]") || !strings.Contains(string(b), "https://[::1]:8443%{REQUEST_URI}") {
+		t.Fatal(string(b))
+	}
+}
+
+func TestApacheForwardedPorts(t *testing.T) {
+	c := testConfig(t)
+	c.Web.HTTPPort = 8080
+	c.Web.HTTPSPort = 8443
+	b, err := Apache(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	for _, want := range []string{
+		"MDPortMap http:8080 https:8443",
+		"RewriteRule ^ https://cloud.example.com%{REQUEST_URI}",
+		"RewriteRule ^ https://nc.lan:8443%{REQUEST_URI}",
+	} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("missing %q", want)
+		}
+	}
+	if strings.Contains(s, "https://cloud.example.com:8443") {
+		t.Fatal("redirect leaked the internal HTTPS port")
+	}
+}
+
+func TestApacheWindowsComputerName(t *testing.T) {
+	c := testConfig(t)
+	c.Web.Sites = []config.Site{{Addresses: []string{"NC_SERVER:8443"}, TLS: "internal"}}
+	b, err := Apache(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "ServerName NC_SERVER") {
+		t.Fatal(string(b))
+	}
+}
+
+func TestApacheRejectsInvalidAddresses(t *testing.T) {
+	for _, addr := range []string{"https://x/path", "https://x?token=a", "https://x#fragment", "https://user@x", "https://x:99999", "http://x", "https://x\nInclude other", "https://*.example.com"} {
+		t.Run(addr, func(t *testing.T) {
+			c := testConfig(t)
+			c.Web.Sites = []config.Site{{Addresses: []string{addr}, TLS: "internal"}}
+			if _, err := Apache(c); err == nil {
+				t.Fatalf("accepted %q", addr)
+			}
+		})
+	}
+	c := testConfig(t)
+	c.Paths.StateDir = "C:/state\nInclude other"
+	if _, err := Apache(c); err == nil {
+		t.Fatal("accepted newline in path")
+	}
+	c = testConfig(t)
+	c.Web.Sites[0].Addresses = []string{"https://localhost:80"}
+	if _, err := Apache(c); err == nil {
+		t.Fatal("accepted HTTP/TLS listener conflict")
 	}
 }
 

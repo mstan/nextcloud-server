@@ -74,8 +74,8 @@ jobs:
         shell: pwsh
         run: |
           $lock = Get-Content windows/build/deps.lock.json -Raw | ConvertFrom-Json
-          Invoke-WebRequest $lock.frankenphp.url -OutFile fp.zip
-          if ((Get-FileHash fp.zip -Algorithm SHA256).Hash -ne $lock.frankenphp.sha256.ToUpper()) { throw 'frankenphp hash mismatch' }
+          Invoke-WebRequest $lock.php.url -OutFile fp.zip
+          if ((Get-FileHash fp.zip -Algorithm SHA256).Hash -ne $lock.php.sha256.ToUpper()) { throw 'PHP hash mismatch' }
           & "$env:SystemRoot\System32\tar.exe" -xf fp.zip -C $env:RUNNER_TEMP
           $php = Join-Path $env:RUNNER_TEMP 'php.exe'
           $files = git diff --name-only --diff-filter=AM "v$($lock.nextcloud.version)" HEAD -- '*.php' 'occ'
@@ -103,7 +103,7 @@ jobs:
         run: |
           $lock = Get-Content windows/build/deps.lock.json -Raw | ConvertFrom-Json
           $php = Join-Path $env:RUNNER_TEMP 'php'
-          foreach ($d in @(@{u = $lock.frankenphp.url; s = $lock.frankenphp.sha256; to = $php}, @{u = $lock.pecl.apcu.url; s = $lock.pecl.apcu.sha256; to = "$php-apcu"})) {
+          foreach ($d in @(@{u = $lock.php.url; s = $lock.php.sha256; to = $php}, @{u = $lock.pecl.apcu.url; s = $lock.pecl.apcu.sha256; to = "$php-apcu"})) {
             Invoke-WebRequest $d.u -OutFile dl.zip
             if ((Get-FileHash dl.zip -Algorithm SHA256).Hash -ne $d.s.ToUpper()) { throw "hash mismatch: $($d.u)" }
             New-Item -ItemType Directory -Force $d.to | Out-Null

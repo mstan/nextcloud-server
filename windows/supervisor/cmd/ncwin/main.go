@@ -7,7 +7,7 @@
 //	ncwin occ <occ args...>
 //	ncwin grant-path <dir>
 //	ncwin run --config <path>     (foreground, for debugging)
-//	ncwin render --config <path>  (write generated php.ini / Caddyfile and exit)
+//	ncwin render --config <path>  (write generated php.ini / httpd.conf and exit)
 package main
 
 import (
@@ -93,6 +93,13 @@ func main() {
 		err = runForeground(configFlag(cmd, args))
 	case "render":
 		err = renderOnly(configFlag(cmd, args))
+	case "web-reload":
+		var c config.Config
+		c, err = config.Load(configFlag(cmd, args))
+		if err == nil {
+			ipc.UsePipe(c.PipeName())
+			err = ipc.Call("web-reload", nil, nil, nil)
+		}
 	case "status":
 		err = status()
 	case "shutdown":
@@ -320,7 +327,7 @@ func runSetup(args []string) error {
 	return err
 }
 
-// ca manages the local certificate authority Caddy uses for tls = "internal" sites.
+// ca manages the local certificate authority for tls = "internal" sites.
 //
 //	ncwin ca export <file.crt>   copy the root certificate (install it on client devices)
 //	ncwin ca trust               add it to this machine's Trusted Root store (elevated)
@@ -332,9 +339,9 @@ func ca(args []string) error {
 	if err != nil {
 		return err
 	}
-	root := filepath.Join(filepath.FromSlash(c.CaddyDataDir()), "pki", "authorities", "local", "root.crt")
+	root := c.CARootPath()
 	if _, err := os.Stat(root); err != nil {
-		return fmt.Errorf("no local CA yet (%s); start the service once so Caddy creates it", root)
+		return fmt.Errorf("no local CA yet (%s); run ncwin render or start the service once", root)
 	}
 	rest := fs.Args()
 	switch {
