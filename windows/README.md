@@ -15,8 +15,8 @@ the pieces that make it a service:
 ## Install
 
 Run `ncwin-<version>.msi` (elevated). The installer asks for the data
-directory, database (bundled PostgreSQL, MariaDB, or SQLite), ports, LAN host
-names and an optional public domain, then installs the `ncwin` service, runs
+directory, database (PostgreSQL by default, with MariaDB and SQLite options),
+ports, LAN host names and an optional public domain, then installs the `ncwin` service, runs
 `ncwin setup`, and starts it. The admin login is `admin`; its password is in
 `C:\ProgramData\ncwin\initial-admin-password.txt` (Administrators only) —
 change it after the first login. Unattended:

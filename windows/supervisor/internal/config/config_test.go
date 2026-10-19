@@ -8,6 +8,16 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+func TestExampleConfig(t *testing.T) {
+	c, err := Load(filepath.Join("..", "..", "ncwin.toml.example"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Database.Type != "pgsql" || c.Database.Mode != "bundled" || c.Database.Host != "127.0.0.1" || c.Database.Port != 55432 {
+		t.Fatalf("example must use bundled PostgreSQL on its dedicated port: %+v", c.Database)
+	}
+}
+
 func TestCleanPath(t *testing.T) {
 	for in, want := range map[string]string{
 		`I:\nextcloud.`:            `I:\nextcloud`,
