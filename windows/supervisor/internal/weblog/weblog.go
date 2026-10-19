@@ -1,4 +1,4 @@
-// Package weblog turns the web server's JSON access log into ring events, so
+// Package weblog turns the web server's access log into ring events, so
 // a failed request (e.g. a 423 Locked) can be attributed by time against
 // everything else in the ring.
 package weblog
@@ -31,14 +31,41 @@ type entry struct {
 	Status   int     `json:"status"`
 }
 
-// Parse decodes one Caddy JSON access-log line. It reports ok=false for
+// Parse decodes one Apache access-log line or a legacy Caddy JSON line.
+// It reports ok=false for
 // lines that are not access-log entries, and keep=false for requests not
 // worth recording: successful GET, HEAD and PROPFIND requests dominate the
 // traffic, so everything else (writes, locks, moves, deletes) and every
 // status >= 400 is kept. The query string is dropped (it can carry tokens).
 func Parse(line []byte) (msg string, fields map[string]string, keep, ok bool) {
 	var e entry
-	if err := json.Unmarshal(line, &e); err != nil || e.Request.Method == "" {
+	if len(line) > 0 && line[0] == '{' {
+		if err := json.Unmarshal(line, &e); err != nil {
+			return "", nil, false, false
+		}
+	} else {
+		parts := strings.Split(strings.TrimSpace(string(line)), "\t")
+		if len(parts) != 7 {
+			return "", nil, false, false
+		}
+		var err error
+		if e.TS, err = strconv.ParseFloat(parts[0], 64); err != nil {
+			return "", nil, false, false
+		}
+		e.Request.RemoteIP, e.Request.Method, e.Request.URI = parts[1], parts[2], parts[3]
+		if e.Status, err = strconv.Atoi(parts[4]); err != nil {
+			return "", nil, false, false
+		}
+		micros, err := strconv.ParseInt(parts[5], 10, 64)
+		if err != nil {
+			return "", nil, false, false
+		}
+		e.Duration = float64(micros) / 1e6
+		if e.Size, err = strconv.ParseInt(parts[6], 10, 64); err != nil {
+			return "", nil, false, false
+		}
+	}
+	if e.Request.Method == "" {
 		return "", nil, false, false
 	}
 	path := e.Request.URI

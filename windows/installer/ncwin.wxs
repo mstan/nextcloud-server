@@ -56,7 +56,7 @@
     <!-- Nextcloud's setup appends to nextcloud\.htaccess, and Windows Installer
          never replaces an unversioned file modified after it was installed.
          Removing it first makes every install lay down the release's copy
-         (the service account cannot write it afterwards; Caddy ignores it). -->
+         (the service account cannot write it afterwards; Apache reads it). -->
     <SetProperty Id="NCWIN_WEBROOT" Value="[INSTALLFOLDER]nextcloud\" Before="RemoveFiles" Sequence="execute" />
     <Component Id="FreshHtaccess" Directory="INSTALLFOLDER" Guid="3e7c1f52-8d4a-4b6e-9a0f-5c2d7e1b9a43">
       <RemoveFile Id="RmHtaccess" Property="NCWIN_WEBROOT" Name=".htaccess" On="install" />
@@ -79,12 +79,11 @@
       <ServiceControl Id="NcwinControl" Name="ncwin" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
     </Component>
 
-    <Component Id="Firewall" Directory="INSTALLFOLDER" Guid="5b3a2f0e-0f5c-4c79-9e43-6a3a1b8f2c11">
+    <Component Id="Firewall" Directory="INSTALLFOLDER" Guid="b1074d75-56cf-45b4-9dc2-778251d529e9">
       <!-- Per program, not per port: ports in ncwin.toml can change after install.
-           TCP for HTTP/1.1+2, UDP for HTTP/3 (QUIC). The databases bind 127.0.0.1 only. -->
-      <fire:FirewallException Id="FwWebTcp" Name="Nextcloud (ncwin) web" Program="[INSTALLFOLDER]php\frankenphp.exe" Protocol="tcp" Scope="any" Profile="all" />
-      <fire:FirewallException Id="FwWebUdp" Name="Nextcloud (ncwin) web (HTTP/3)" Program="[INSTALLFOLDER]php\frankenphp.exe" Protocol="udp" Scope="any" Profile="all" />
-      <RegistryValue Root="HKLM" Key="SOFTWARE\ncwin" Name="Firewall" Type="integer" Value="1" KeyPath="yes" />
+           TCP for HTTP/1.1+2. The databases bind 127.0.0.1 only. -->
+      <fire:FirewallException Id="FwApacheTcp" Name="Nextcloud (ncwin) Apache web" Program="[INSTALLFOLDER]apache\bin\httpd.exe" Protocol="tcp" Scope="any" Profile="all" />
+      <RegistryValue Root="HKLM" Key="SOFTWARE\ncwin" Name="FirewallApache" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
     <!-- Nextcloud paths (user/files/folder/versions/...) routinely exceed MAX_PATH. -->

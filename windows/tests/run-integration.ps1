@@ -43,7 +43,7 @@ $env:NCWIN_ADMIN_PASS = 'Integration-Admin-Pass-1'
 & $exe setup --config "$t\state\ncwin.toml" --no-acl --if-not-installed *> "$t\setup-out.txt"
 if ($LASTEXITCODE) { Get-Content "$t\state\log\setup.log" -Tail 10; throw 'setup failed' }
 
-$p = Start-Process $exe -ArgumentList @('run', '--config', "$t\state\ncwin.toml") -PassThru -NoNewWindow `
+$p = Start-Process $exe -ArgumentList @('run', '--config', "`"$t\state\ncwin.toml`"") -PassThru -WindowStyle Hidden `
     -RedirectStandardOutput "$t\run.out" -RedirectStandardError "$t\run.err"
 try {
     # Before the control pipe exists `ncwin events` fails; that is not an error here.
@@ -55,7 +55,7 @@ try {
         Start-Sleep 2
     }
     $env:NCWIN_URL = "https://localhost:$HttpsPort"; $env:NCWIN_USER = 'admin'; $env:NCWIN_PASS = $env:NCWIN_ADMIN_PASS
-    $env:NCWIN_DATA = "$t\data"; $env:NCWIN_EXE = $exe; $env:NCWIN_LAN_HOST = $lanHost
+    $env:NCWIN_DATA = "$t\data"; $env:NCWIN_STATE = "$t\state"; $env:NCWIN_EXE = $exe; $env:NCWIN_LAN_HOST = $lanHost
     Push-Location $PSScriptRoot
     try {
         & go test ./... -count=1 -v -timeout 40m @GoTestArgs

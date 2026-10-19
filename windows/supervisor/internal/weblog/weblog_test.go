@@ -40,6 +40,23 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestApacheLog(t *testing.T) {
+	line := "1760635225.381000\t127.0.0.1\tDELETE\t/remote.php/dav/files/admin/again\t423\t12300\t512\n"
+	msg, f, keep, ok := Parse([]byte(line))
+	if !ok || !keep || msg != "DELETE /remote.php/dav/files/admin/again" || f["ms"] != "12" || f["size"] != "512" || f["status"] != "423" {
+		t.Fatalf("%q %v %v %v", msg, f, keep, ok)
+	}
+	for _, line := range []string{"bad\t127.0.0.1\tGET\t/\t200\t1\t0", "1\t127.0.0.1\tGET\t/\tx\t1\t0", "1\t127.0.0.1\tGET\t/\t200\tx\t0", "1\t127.0.0.1\tGET\t/\t200\t1\tx"} {
+		if _, _, _, ok := Parse([]byte(line)); ok {
+			t.Fatalf("accepted malformed line %q", line)
+		}
+	}
+	_, _, keep, ok = Parse([]byte("1760635225.381000\t127.0.0.1\tGET\t/status.php\t200\t1000\t0"))
+	if !ok || keep {
+		t.Fatal("recorded routine GET")
+	}
+}
+
 func TestTailFollowsAppendsAndRotation(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "access.log")
 	os.WriteFile(path, []byte(del423), 0o644) // pre-existing history is not replayed
