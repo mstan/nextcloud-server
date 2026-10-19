@@ -34,13 +34,13 @@ tls = "internal"
 #tls = "acme"
 
 [database]
-type = "sqlite"          # sqlite | mysql | pgsql
-#mode = "bundled"        # bundled (ncwin runs it) | external
-#host = "127.0.0.1"
-#port = 3306
-#name = "nextcloud"
-#user = "nextcloud"
-#password = ""
+type = "pgsql"           # pgsql (default) | mysql | sqlite
+mode = "bundled"         # bundled (ncwin runs it) | external
+host = "127.0.0.1"
+port = 55432
+name = "nextcloud"
+user = "nextcloud"
+password = ""            # ncwin configure generates this; required for bundled databases
 
 [cron]
 interval = "5m"
