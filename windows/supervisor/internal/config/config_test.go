@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/BurntSushi/toml"
@@ -93,5 +94,20 @@ func TestConfigPathAndThreads(t *testing.T) {
 	loaded.Web.PHPThreads = -1
 	if err := loaded.Validate(); err == nil {
 		t.Fatal("accepted negative PHP thread count")
+	}
+	loaded.Web.PHPThreads = 1921
+	if err := loaded.Validate(); err == nil {
+		t.Fatal("accepted PHP thread count above Apache's limit")
+	}
+	loaded.Web.PHPThreads = 0
+	if err := loaded.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if want := max(64, 2*runtime.NumCPU()); loaded.Web.PHPThreads != want {
+		t.Fatalf("automatic PHP threads = %d, want %d", loaded.Web.PHPThreads, want)
+	}
+	loaded.Web.PHPThreads = 8
+	if err := loaded.Validate(); err != nil || loaded.Web.PHPThreads != 8 {
+		t.Fatalf("explicit PHP threads = %d, %v", loaded.Web.PHPThreads, err)
 	}
 }

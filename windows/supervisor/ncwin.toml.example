@@ -12,7 +12,7 @@ data_dir    = 'D:\NextcloudData'         # Nextcloud data directory (keep the pa
 # or via port forwarding.
 http_port  = 80
 https_port = 443
-php_threads  = 0        # 0 = 2 x CPU cores
+php_threads  = 0        # max simultaneous connections; 0 = 64, or 2 x CPU cores if more
 upload_max   = "16G"
 memory_limit = "1G"
 timezone     = "UTC"

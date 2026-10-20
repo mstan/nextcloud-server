@@ -45,7 +45,7 @@ type Paths struct {
 type Web struct {
 	HTTPPort    int    `toml:"http_port"`
 	HTTPSPort   int    `toml:"https_port"`
-	PHPThreads  int    `toml:"php_threads"` // 0 = 2x CPUs
+	PHPThreads  int    `toml:"php_threads"` // Apache worker threads; 0 = automatic
 	UploadMax   string `toml:"upload_max"`
 	MemoryLimit string `toml:"memory_limit"`
 	Timezone    string `toml:"timezone"`
@@ -161,11 +161,13 @@ func (c *Config) Validate() error {
 	if c.Web.HTTPSPort < 1 || c.Web.HTTPSPort > 65535 {
 		add("web.https_port out of range: %d", c.Web.HTTPSPort)
 	}
+	// Apache's Windows MPM holds one thread per open connection, idle
+	// keep-alive connections included, so size for connections, not CPUs.
 	if c.Web.PHPThreads == 0 {
-		c.Web.PHPThreads = 2 * runtime.NumCPU()
+		c.Web.PHPThreads = max(64, 2*runtime.NumCPU())
 	}
-	if c.Web.PHPThreads < 1 {
-		add("web.php_threads must be positive or zero for automatic sizing")
+	if c.Web.PHPThreads < 1 || c.Web.PHPThreads > 1920 {
+		add("web.php_threads must be 1-1920, or zero for automatic sizing")
 	}
 	if len(c.Web.Sites) == 0 {
 		add("at least one [[web.site]] is required")
