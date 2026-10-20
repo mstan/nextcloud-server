@@ -26,6 +26,7 @@ LoadModule setenvif_module modules/mod_setenvif.so
 LoadModule headers_module modules/mod_headers.so
 LoadModule rewrite_module modules/mod_rewrite.so
 LoadModule log_config_module modules/mod_log_config.so
+LoadModule reqtimeout_module modules/mod_reqtimeout.so
 LoadModule deflate_module modules/mod_deflate.so
 LoadModule filter_module modules/mod_filter.so
 LoadModule ssl_module modules/mod_ssl.so
@@ -33,6 +34,7 @@ LoadModule http2_module modules/mod_http2.so
 LoadModule socache_shmcb_module modules/mod_socache_shmcb.so
 LoadModule php_module "{{.Config.PHPDir}}/php8apache2_4.dll"
 PHPIniDir "{{.Config.GeneratedDir}}"
+RequestReadTimeout handshake=10-20,MinRate=500 header=20-40,MinRate=500 body=20,MinRate=500
 TypesConfig conf/mime.types
 DirectoryIndex index.php index.html
 ErrorLog "{{.Config.LogDir}}/apache.log"
