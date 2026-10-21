@@ -12,9 +12,9 @@
     "checksums_url": "https://www.apachelounge.com/download/VS18/binaries/httpd-2.4.69-261002-Win64-VS18.zip.txt"
   },
   "php": {
-    "version": "8.5.11-ts-vs17-x64",
-    "url": "https://downloads.php.net/~windows/releases/archives/php-8.5.11-Win32-vs17-x64.zip",
-    "sha256": "c83d5a1e0d760fb026ce695d8a70a73a4c81ac224b3e5c425406b23a7d53e1de"
+    "version": "8.5.12-ts-vs17-x64",
+    "url": "https://downloads.php.net/~windows/releases/archives/php-8.5.12-Win32-vs17-x64.zip",
+    "sha256": "660f3ff6ccbdf60f9607ef54bdba85ee22a58d61fd3633b38a93d57fb7c3d184"
   },
   "pecl": {
     "apcu": {
