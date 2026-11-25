@@ -304,7 +304,7 @@ class ObjectStoreStorage extends Common implements IChunkedFileWrite {
 	public function fopen(string $path, string $mode) {
 		$path = $this->normalizePath($path);
 
-		$baseName = basename($path);
+		$baseName = \OC\Files\Utils\PathHelper::basename($path);
 		if (strrpos($baseName, '.') !== false) {
 			$ext = substr($baseName, strrpos($baseName, '.'));
 		} else {

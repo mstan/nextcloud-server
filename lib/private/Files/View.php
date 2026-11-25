@@ -1912,7 +1912,7 @@ class View {
 		$rootFolder = Server::get(IRootFolder::class);
 		$userFolderPath = '/' . $user . '/files';
 
-		for ($path = $targetPath; str_starts_with($path, $userFolderPath . '/'); $path = dirname($path)) {
+		for ($path = $targetPath; str_starts_with($path, $userFolderPath . '/'); $path = \OC\Files\Utils\PathHelper::dirname($path)) {
 			try {
 				$node = $rootFolder->get($path);
 			} catch (NotFoundException) {

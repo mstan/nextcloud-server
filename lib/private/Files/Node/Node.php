@@ -473,7 +473,7 @@ class Node implements INode {
 				)
 			)
 		) {
-			if (dirname($this->path) === dirname($targetPath)) {
+			if (\OC\Files\Utils\PathHelper::dirname($this->path) === \OC\Files\Utils\PathHelper::dirname($targetPath)) {
 				$canMove = DavUtil::canRename($this, $parent);
 			} else {
 				// the source is removed from its folder, so it needs to be deletable unless it is a movable mount point

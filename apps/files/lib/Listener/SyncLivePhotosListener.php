@@ -131,7 +131,7 @@ class SyncLivePhotosListener implements IEventListener {
 
 			if (
 				$sourceFile->getStorageId() !== $peerFile->getData()->getStorageId()
-				|| dirname($sourceFile->getPath()) !== dirname($peerFile->getInternalPath())
+				|| \OC\Files\Utils\PathHelper::dirname($sourceFile->getPath()) !== \OC\Files\Utils\PathHelper::dirname($peerFile->getInternalPath())
 			) {
 				continue; // Peer file is not in the same folder as the deleted file
 			}
