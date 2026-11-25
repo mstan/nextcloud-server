@@ -18,6 +18,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'disposable.ps1')
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $lock = Get-Content -Raw (Join-Path $PSScriptRoot 'deps.lock.json') | ConvertFrom-Json
 $v = [version]$lock.nextcloud.version
@@ -51,5 +52,5 @@ try {
     $resolvedTmp = [IO.Path]::GetFullPath($tmp)
     $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
     if (-not $resolvedTmp.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'MSI temporary directory is outside the temporary root' }
-    Remove-Item -LiteralPath $resolvedTmp -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-NcwinBuildPath -Path $resolvedTmp -Root ([IO.Path]::GetTempPath())
 }

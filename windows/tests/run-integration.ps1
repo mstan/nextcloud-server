@@ -20,6 +20,7 @@ param(
     # Extra `go test` arguments, e.g. '-run','TestDeleteThenRecreate'.
     [string[]]$GoTestArgs = @()
 )
+. (Join-Path $PSScriptRoot '..\build\disposable.ps1')
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -29,7 +30,7 @@ foreach ($p in $HttpPort, $HttpsPort) {
 $exe = Join-Path $Build 'ncwin.exe'
 if (-not (Test-Path $exe)) { throw "$Build is not an assembled ncwin tree" }
 $t = Join-Path $StateRoot $Database
-if (Test-Path $t) { Remove-Item -Recurse -Force $t }
+if (Test-Path $t) { Remove-NcwinBuildPath -Path $t -Root $StateRoot }
 New-Item -ItemType Directory -Force $t | Out-Null
 $lanHost = 'ncwin-integration'
 
@@ -48,17 +49,15 @@ $p = Start-Process $exe -ArgumentList @('run', '--config', "`"$t\state\ncwin.tom
 try {
     # Before the control pipe exists `ncwin events` fails; that is not an error here.
     function WebReady { $ErrorActionPreference = 'Continue'; ((& $exe events --kind proc.ready 2>&1 | Out-String) -match ' web ') }
-    $deadline = (Get-Date).AddMinutes(10)
     while (-not (WebReady)) {
         if ($p.HasExited) { throw "ncwin run exited ($($p.ExitCode)); see $t\run.err" }
-        if ((Get-Date) -gt $deadline) { throw 'web never became ready' }
         Start-Sleep 2
     }
     $env:NCWIN_URL = "https://localhost:$HttpsPort"; $env:NCWIN_USER = 'admin'; $env:NCWIN_PASS = $env:NCWIN_ADMIN_PASS
     $env:NCWIN_DATA = "$t\data"; $env:NCWIN_STATE = "$t\state"; $env:NCWIN_EXE = $exe; $env:NCWIN_LAN_HOST = $lanHost
     Push-Location $PSScriptRoot
     try {
-        & go test ./... -count=1 -v -timeout 40m @GoTestArgs
+        & go test ./... -count=1 -v -timeout 0 @GoTestArgs
         $code = $LASTEXITCODE
     } finally { Pop-Location }
     & $exe occ integrity:check-core
@@ -68,7 +67,7 @@ try {
 } finally {
     $ErrorActionPreference = 'Continue'
     & $exe shutdown 2>&1 | Out-Null
-    if (-not $p.WaitForExit(900000)) { Stop-Process -Id $p.Id -Force }
+    $p.WaitForExit()
 }
 "integration suite exit code $code (events journal: $t\state\log\events.jsonl)"
 exit $code

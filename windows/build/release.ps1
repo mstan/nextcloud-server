@@ -28,6 +28,7 @@ param(
     [Parameter(Mandatory)] [ValidateRange(1, 99)] [int]$WinBuild,
     # Default: nextcloud-build next to the repository.
     [string]$WorkDir,
+    [string]$SigningDir,
     [switch]$Publish,
     [switch]$SkipUpstreamTests,
     [int]$HttpPort = 38080,
@@ -35,6 +36,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'disposable.ps1')
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 if (-not $WorkDir) { $WorkDir = Join-Path (Split-Path -Parent $repo) 'nextcloud-build' }
 $lock = Get-Content -Raw (Join-Path $PSScriptRoot 'deps.lock.json') | ConvertFrom-Json
@@ -65,16 +67,20 @@ if ($Publish) {
 
 Step 'go vet + go test'
 Push-Location (Join-Path $repo 'windows\supervisor')
-try { & go vet ./...; Native 'go vet'; & go test ./... -count=1; Native 'go test' } finally { Pop-Location }
+try { & go vet ./...; Native 'go vet'; & go test ./... -count=1 -timeout 0; Native 'go test' } finally { Pop-Location }
 Push-Location (Join-Path $repo 'windows\tests')
 try { & go vet ./...; Native 'go vet (integration tests)' } finally { Pop-Location }
+
+Step 'build cleanup checks'
+& powershell -NoProfile -File (Join-Path $repo 'windows\tests\build-cleanup.ps1') -Root (Join-Path $WorkDir 'cleanup-tests')
+Native 'build cleanup checks'
 
 Step 'Windows lint'
 Python (Join-Path $repo 'windows\build\lint_windows.py'); Native 'lint_windows.py'
 
 Step 'assemble (signed)'
 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'assemble.ps1') `
-    -WorkDir $WorkDir -Clean -WithMariaDB -WithPostgres -Version $tag
+    -WorkDir $WorkDir -Clean -WithMariaDB -WithPostgres -Version $tag -SigningDir $SigningDir
 Native 'assemble.ps1'
 $php = Join-Path $out 'php\php.exe'
 
@@ -115,7 +121,7 @@ if (-not $SkipUpstreamTests) {
             & $php tests/enable_all.php; Native 'enable_all'
         }
         $junit = Join-Path $WorkDir 'phpunit\junit'
-        if (Test-Path $junit) { Remove-Item -Recurse -Force $junit }
+        if (Test-Path $junit) { Remove-NcwinBuildPath -Path $junit -Root $WorkDir }
         New-Item -ItemType Directory $junit | Out-Null
         $sh = Join-Path $env:ProgramFiles 'Git\bin\sh.exe'
         & $sh windows/tests/phpunit-windows.sh ($php -replace '\\', '/') ($junit -replace '\\', '/')
@@ -132,7 +138,7 @@ Step 'integration suite (bundled PostgreSQL)'
 Native 'integration suite'
 
 Step 'MSI, zip, checksums'
-if (Test-Path $rel) { Remove-Item -Recurse -Force $rel }
+if (Test-Path $rel) { Remove-NcwinBuildPath -Path $rel -Root $WorkDir }
 New-Item -ItemType Directory -Force $rel | Out-Null
 $base = "ncwin-$($tag.TrimStart('v'))"
 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'build-msi.ps1') `

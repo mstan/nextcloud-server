@@ -1,9 +1,9 @@
 {
   "nextcloud": {
-    "version": "35.0.2",
-    "url": "https://github.com/mstan/nextcloud-server/releases/download/deps/nextcloud-35.0.2.zip",
-    "sha256": "2f1dcec6a7cdab70346e80a823ccaaa2001a6085013d9f2ae0a2606fa38c2835",
-    "upstream_url": "https://download.nextcloud.com/server/releases/nextcloud-35.0.2.zip"
+    "version": "35.0.3",
+    "url": "https://github.com/mstan/nextcloud-server/releases/download/deps/nextcloud-35.0.3.zip",
+    "sha256": "d4c926f3523fb3ef9bb89ee78111d5305ffa400d03b346c2a7b0308f7db1e222",
+    "upstream_url": "https://download.nextcloud.com/server/releases/nextcloud-35.0.3.zip"
   },
   "apache": {
     "version": "2.4.69-261002-Win64-VS18",

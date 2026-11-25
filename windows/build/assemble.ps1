@@ -41,6 +41,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'disposable.ps1')
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $git = Join-Path $env:ProgramFiles 'Git\mingw64\bin\git.exe'
 if (-not (Test-Path -LiteralPath $git)) { $git = (Get-Command git -CommandType Application).Source }
@@ -96,10 +97,10 @@ function Expand-Zip([string]$Zip, [string]$Dest) {
     if ($LASTEXITCODE -ne 0) { throw "tar failed extracting $Zip" }
 }
 
-if ($Clean -and (Test-Path $Out)) { Remove-Item -Recurse -Force $Out }
+if ($Clean -and (Test-Path $Out)) { Remove-NcwinBuildPath -Path $Out -Root (Split-Path -Parent ([IO.Path]::GetFullPath($Out))) }
 if (Test-Path $Out) { throw "$Out exists; pass -Clean to rebuild it" }
 $stage = "$Out.staging"
-if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+if (Test-Path $stage) { Remove-NcwinBuildPath -Path $stage -Root (Split-Path -Parent ([IO.Path]::GetFullPath($stage))) }
 New-Item -ItemType Directory -Force $stage | Out-Null
 
 # 1. Nextcloud release + fork patch set.
@@ -140,7 +141,7 @@ Expand-Zip (Get-Pinned $httpd.url $httpd.sha256) $httpdTmp
 Move-Item -LiteralPath (Join-Path $httpdTmp 'Apache24') -Destination (Join-Path $stage 'apache')
 $httpdResolved = [IO.Path]::GetFullPath($httpdTmp)
 if (-not $httpdResolved.StartsWith([IO.Path]::GetFullPath($stage) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Apache unpack path is outside staging' }
-Remove-Item -LiteralPath $httpdResolved -Recurse -Force
+Remove-NcwinBuildPath -Path $httpdResolved -Root $stage
 $phpRuntime = $lock.php
 Write-Host "extract PHP $($phpRuntime.version)"
 Expand-Zip (Get-Pinned $phpRuntime.url $phpRuntime.sha256) (Join-Path $stage 'php')
@@ -148,12 +149,12 @@ if (-not (Test-Path -LiteralPath (Join-Path $stage 'php\php8apache2_4.dll'))) { 
 foreach ($ext in $lock.pecl.PSObject.Properties) {
     $zip = Get-Pinned $ext.Value.url $ext.Value.sha256
     $tmp = Join-Path $WorkDir "pecl-$($ext.Name)"
-    if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
+    if (Test-Path $tmp) { Remove-NcwinBuildPath -Path $tmp -Root $WorkDir }
     Expand-Zip $zip $tmp
     Copy-Item (Join-Path $tmp "php_$($ext.Name).dll") (Join-Path $stage 'php\ext')
     # Dependency DLLs (e.g. ImageMagick CORE_RL_*.dll) must sit beside php.exe.
     Get-ChildItem $tmp -Filter *.dll | Where-Object { $_.Name -notlike 'php_*' } | Copy-Item -Destination (Join-Path $stage 'php')
-    Remove-Item -Recurse -Force $tmp
+    Remove-NcwinBuildPath -Path $tmp -Root $WorkDir
 }
 
 # 2b. Re-sign the patched core and windows_integration with the downstream key,
@@ -166,7 +167,7 @@ if ($NoSign) {
         if (-not (Test-Path (Join-Path $SigningDir $f))) { throw "missing $f in $SigningDir (or pass -NoSign for a developer build)" }
     }
     $signTmp = Join-Path $WorkDir 'sign-tmp'
-    if (Test-Path $signTmp) { Remove-Item -Recurse -Force $signTmp }
+    if (Test-Path $signTmp) { Remove-NcwinBuildPath -Path $signTmp -Root $WorkDir }
     New-Item -ItemType Directory -Force (Join-Path $signTmp 'config') | Out-Null
     $ext = (Join-Path $stage 'php\ext') -replace '\\', '/'
     Set-Content -Encoding ASCII -Path (Join-Path $signTmp 'php.ini') -Value @(
@@ -189,7 +190,7 @@ if ($NoSign) {
     } finally {
         Pop-Location
         Remove-Item Env:PHPRC, Env:NEXTCLOUD_CONFIG_DIR, Env:OPENSSL_CONF -ErrorAction SilentlyContinue
-        Remove-Item -Recurse -Force $signTmp -ErrorAction SilentlyContinue
+        Remove-NcwinBuildPath -Path $signTmp -Root $WorkDir
     }
 }
 
@@ -199,7 +200,7 @@ foreach ($db in @(@{On = $WithMariaDB; Key = 'mariadb'}, @{On = $WithPostgres; K
     $d = $lock.($db.Key)
     if (-not $d) { throw "deps.lock.json has no '$($db.Key)' entry" }
     $tmp = Join-Path $WorkDir "db-$($db.Key)"
-    if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
+    if (Test-Path $tmp) { Remove-NcwinBuildPath -Path $tmp -Root $WorkDir }
     Expand-Zip (Get-Pinned $d.url $d.sha256) $tmp
     $top = Get-ChildItem $tmp -Directory | Select-Object -First 1
     Move-Item $top.FullName (Join-Path $stage $db.Key)
@@ -208,10 +209,10 @@ foreach ($db in @(@{On = $WithMariaDB; Key = 'mariadb'}, @{On = $WithPostgres; K
     if ($d.PSObject.Properties.Name -contains 'strip') {
         foreach ($s in $d.strip) {
             $p = Join-Path (Join-Path $stage $db.Key) $s
-            if (Test-Path $p) { Remove-Item -Recurse -Force $p }
+            foreach ($entry in @(Get-Item -Path $p -ErrorAction SilentlyContinue)) { Remove-NcwinBuildPath -Path $entry.FullName -Root $stage }
         }
     }
-    Remove-Item -Recurse -Force $tmp
+    Remove-NcwinBuildPath -Path $tmp -Root $WorkDir
 }
 
 # 4. ncwin.exe
